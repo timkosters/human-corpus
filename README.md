@@ -33,6 +33,9 @@ Adding a source is one class in `humancorpus/sources.py`.
   `pip install -e ".[fast]"`. Without the sidecar, SQLite FTS5 is used.
 - **Style**: `register="intimate"` (first or second person, with feeling) finds sentences that
   fit a love letter rather than encyclopedia lines about love; `like="<example>"` ranks by tone.
+  `style=` adds 12 tags (all must match): grateful, apologetic, grieving, celebratory, sensory,
+  reflective, advice, casual, aphorism, archaic, question, exclamation. E.g. a toast:
+  `style="celebratory"`; a condolence card: `style="grieving"`.
 
 ## Quick start
 

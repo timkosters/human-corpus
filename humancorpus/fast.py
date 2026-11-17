@@ -29,7 +29,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .text import EMOTIVE_BIT, REGISTERS, register_code, register_name
+from .text import EMOTIVE_BIT, REGISTERS, STYLE_BIT, STYLES, register_code, register_name, style_mask, style_names
 
 MODEL = os.environ.get("HUMANCORPUS_EMBED", "minishlab/potion-base-8M")
 
@@ -56,17 +56,26 @@ def _schema():
     sb.add_unsigned_field("source", indexed=True, fast=True)
     sb.add_unsigned_field("register", indexed=True, fast=True)
     sb.add_unsigned_field("words", indexed=True, fast=True)
+    sb.add_unsigned_field("styles", indexed=True)  # one value per style bit set
     return sb.build()
 
 
 # --------------------------------------------------------------------------- #
 # Build
 # --------------------------------------------------------------------------- #
+def _tag(texts: list[str]) -> list[tuple[int, int]]:
+    return [(register_code(t), style_mask(t)) for t in texts]
+
+
 def build(db: Path | str, out: Path | str | None = None, batch: int = 50_000,
-          heap_mb: int = 1500, threads: int | None = None) -> dict:
+          heap_mb: int = 1500, threads: int | None = None, vectors: bool = True) -> dict:
+    """vectors=False keeps existing bits/ids/IVF and rebuilds only tags + Tantivy (after tagger changes)."""
+    import multiprocessing as mp
+
     import tantivy
     from model2vec import StaticModel
 
+    pool = mp.get_context("fork").Pool(threads or (os.cpu_count() or 2))  # fork before any threads start
     db = Path(db)
     out = Path(out) if out else default_dir(db)
     (out / "tantivy").mkdir(parents=True, exist_ok=True)
@@ -78,18 +87,26 @@ def build(db: Path | str, out: Path | str | None = None, batch: int = 50_000,
     sources = [r[0] for r in con.execute("SELECT DISTINCT source FROM docs ORDER BY source")]
     src_code = {s: i for i, s in enumerate(sources)}
     doc_src = dict(con.execute("SELECT id, source FROM docs"))
-    model = StaticModel.from_pretrained(MODEL)
+    model = StaticModel.from_pretrained(MODEL) if vectors else None
+    if not vectors:
+        old = np.load(out / "ids.npy", mmap_mode="r")
+        if len(old) != n:
+            raise ValueError(f"existing vectors have {len(old):,} rows, corpus has {n:,}: rebuild with vectors")
+        prev = json.loads((out / "manifest.json").read_text())
 
     # Mean of a sample, so sign bits split each dimension near its median.
-    sample = [r[0] for r in con.execute("SELECT text FROM fragments WHERE id % ? = 0 LIMIT 100000",
-                                        (max(1, n // 100_000),))]
-    mean = model.encode(sample).mean(axis=0).astype(np.float32)
-    dim = mean.shape[0]
-    np.save(out / "mean.npy", mean)
-
-    ids = np.lib.format.open_memmap(out / "ids.npy", mode="w+", dtype=np.uint32, shape=(n,))
-    bits = np.lib.format.open_memmap(out / "bits.npy", mode="w+", dtype=np.uint8, shape=(n, dim // 8))
+    if vectors:
+        sample = [r[0] for r in con.execute("SELECT text FROM fragments WHERE id % ? = 0 LIMIT 100000",
+                                            (max(1, n // 100_000),))]
+        mean = model.encode(sample).mean(axis=0).astype(np.float32)
+        dim = mean.shape[0]
+        np.save(out / "mean.npy", mean)
+        ids = np.lib.format.open_memmap(out / "ids.npy", mode="w+", dtype=np.uint32, shape=(n,))
+        bits = np.lib.format.open_memmap(out / "bits.npy", mode="w+", dtype=np.uint8, shape=(n, dim // 8))
+    else:
+        dim = prev["dim"]
     meta = np.lib.format.open_memmap(out / "meta.npy", mode="w+", dtype=np.uint8, shape=(n, 3))
+    styles = np.lib.format.open_memmap(out / "styles.npy", mode="w+", dtype=np.uint16, shape=(n,))
 
     index = tantivy.Index(_schema(), path=str(out / "tantivy"), reuse=False)
     writer = index.writer(heap_size=heap_mb * 1_000_000, num_threads=threads or (os.cpu_count() or 2))
@@ -100,33 +117,43 @@ def build(db: Path | str, out: Path | str | None = None, batch: int = 50_000,
         if not chunk:
             break
         texts = [c[3] for c in chunk]
-        emb = model.encode(texts) - mean
         k = len(chunk)
-        bits[row:row + k] = np.packbits(emb > 0, axis=1)
-        for j, (fid, doc_id, words, text) in enumerate(chunk):
+        tagged = pool.map_async(_tag, [texts[i:i + 2000] for i in range(0, k, 2000)])
+        if vectors:
+            emb = model.encode(texts) - mean
+            bits[row:row + k] = np.packbits(emb > 0, axis=1)
+            ids[row:row + k] = [c[0] for c in chunk]
+        tags = [t for part in tagged.get() for t in part]
+        for j, ((fid, doc_id, words, text), (r, st)) in enumerate(zip(chunk, tags)):
             s = src_code[doc_src[doc_id]]
-            r = register_code(text)
             w = min(words, 255)
-            ids[row + j] = fid
             meta[row + j] = (w, s, r)
+            styles[row + j] = st
             doc = tantivy.Document()
             doc.add_unsigned("id", fid)
             doc.add_unsigned("source", s)
             doc.add_unsigned("register", r)
             doc.add_unsigned("words", w)
+            for b, name in enumerate(STYLES):
+                if st >> b & 1:
+                    doc.add_unsigned("styles", b)
             doc.add_text("text", text)
             writer.add_document(doc)
         row += k
         rate = row / (time.time() - t0)
         print(f"build-search: {row:,}/{n:,} ({rate:,.0f} rows/s)", file=sys.stderr, flush=True)
+    pool.close()
     writer.commit()
     writer.wait_merging_threads()
-    for a in (ids, bits, meta):
+    for a in (meta, styles) + ((ids, bits) if vectors else ()):
         a.flush()
-    manifest = {"rows": row, "sources": sources, "model": MODEL, "dim": int(dim), "registers": REGISTERS,
-                "built_from": db.name, "seconds": round(time.time() - t0, 1)}
+    docs = {r[0]: [r[1], r[2]] for r in con.execute("SELECT source, max(license), count(*) FROM docs GROUP BY source")}
+    manifest = {"rows": row, "sources": sources, "docs": docs, "model": MODEL, "dim": int(dim), "registers": REGISTERS,
+                "styles": STYLES, "built_from": db.name, "seconds": round(time.time() - t0, 1)}
     con.close()
-    if row >= 1_000_000:
+    if not vectors and "ivf" in prev:
+        manifest["ivf"] = prev["ivf"]
+    elif row >= 1_000_000:
         manifest["ivf"] = build_ivf(out)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     return manifest
@@ -166,6 +193,9 @@ class Engine:
         self.sources = self.manifest["sources"]
         self.ids = np.load(path / "ids.npy", mmap_mode="r")
         self.meta = np.load(path / "meta.npy")  # small: 3 bytes per row, kept in RAM
+        sp = path / "styles.npy"
+        self.styles = np.load(sp) if sp.exists() else np.zeros(len(self.meta), dtype=np.uint16)
+        self.has_styles = sp.exists()
         self.mean = np.load(path / "mean.npy")
         self.model = StaticModel.from_pretrained(self.manifest.get("model", MODEL))
         self.schema = _schema()
@@ -185,6 +215,10 @@ class Engine:
         regs = self.meta[:, 2]
         for name in ("intimate", "personal", "first_person", "dialogue", "emotive", "conversational"):
             rows = np.flatnonzero(np.isin(regs, list(REGISTER_FILTERS[name]))).astype(np.int64)
+            if 0 < len(rows) < 0.4 * len(regs):
+                self.sub[name] = (self._binary_index(bits, rows, dim), rows)
+        for name in STYLES if self.has_styles else ():
+            rows = np.flatnonzero(self.styles & STYLE_BIT[name]).astype(np.int64)
             if 0 < len(rows) < 0.4 * len(regs):
                 self.sub[name] = (self._binary_index(bits, rows, dim), rows)
         faiss.omp_set_num_threads(int(os.environ.get("HUMANCORPUS_THREADS", os.cpu_count() or 2)))
@@ -208,16 +242,19 @@ class Engine:
     def _rows_for_ids(self, fids) -> np.ndarray:
         return np.searchsorted(self.ids, np.asarray(fids, dtype=np.uint32))
 
-    def _allowed(self, rows: np.ndarray, source_code, min_words, max_words, reg_codes) -> np.ndarray:
+    def _allowed(self, rows: np.ndarray, source_code, min_words, max_words, reg_codes, smask=0) -> np.ndarray:
         m = self.meta[rows]
         ok = (m[:, 0] >= min_words) & (m[:, 0] <= max_words)
         if source_code is not None:
             ok &= m[:, 1] == source_code
         if reg_codes is not None:
             ok &= np.isin(m[:, 2], list(reg_codes))
+        if smask:
+            ok &= (self.styles[rows] & smask) == smask
         return ok
 
-    def lexical(self, terms: list[str], mode: str, k: int, source_code, min_words, max_words, reg_codes):
+    def lexical(self, terms: list[str], mode: str, k: int, source_code, min_words, max_words, reg_codes,
+                styles: list[str] = ()):
         import tantivy
 
         if not terms:
@@ -231,27 +268,37 @@ class Engine:
         if reg_codes is not None:
             must.append((tantivy.Occur.Must,
                          tantivy.Query.term_set_query(self.schema, "register", sorted(reg_codes))))
+        for name in styles:
+            must.append((tantivy.Occur.Must, tantivy.Query.term_query(self.schema, "styles", STYLES.index(name))))
         with self.lock:
             searcher = self.tindex.searcher()
             hits = searcher.search(tantivy.Query.boolean_query(must), k, count=False).hits
             return [searcher.doc(addr)["id"][0] for _, addr in hits]
 
     def dense(self, qvec: np.ndarray, k: int, source_code, min_words, max_words, register: str | None,
-              reg_codes) -> list[int]:
+              reg_codes, styles: list[str] = ()) -> list[int]:
         qbits = np.packbits((qvec - self.mean) > 0)[None, :]
-        if register in self.sub:
-            idx, rowmap = self.sub[register]
+        smask = sum(STYLE_BIT[n] for n in styles)
+        # Scan the smallest matching sub-index; other filters are applied after.
+        keys = [n for n in list(styles) + [register] if n in self.sub]
+        key = min(keys, key=lambda n: len(self.sub[n][1])) if keys else None
+        if key:
+            idx, rowmap = self.sub[key]
             _, I = idx.search(qbits, k)
             rows = rowmap[I[0][I[0] >= 0]]
         else:
             _, I = self.bindex.search(qbits, k)
             rows = I[0][I[0] >= 0]
-        rows = rows[self._allowed(rows, source_code, min_words, max_words, reg_codes)]
+        rows = rows[self._allowed(rows, source_code, min_words, max_words, reg_codes, smask)]
         return [int(x) for x in self.ids[rows]]
 
     def register_of(self, fids: list[int]) -> list[str]:
         rows = self._rows_for_ids(fids)
         return [register_name(int(c)) for c in self.meta[rows, 2]]
+
+    def styles_of(self, fids: list[int]) -> list[list[str]]:
+        rows = self._rows_for_ids(fids)
+        return [style_names(int(m)) for m in self.styles[rows]]
 
 
 def _tantivy_query(terms: list[str], mode: str) -> str:

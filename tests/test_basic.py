@@ -44,6 +44,23 @@ def test_register_tags():
     assert register_name(register_code("The bridge spans the river.")) == "expository"
 
 
+def test_style_tags():
+    from humancorpus.text import style_mask, style_names
+
+    def st(s):
+        return style_names(style_mask(s))
+
+    assert "grateful" in st("Thank you for everything you have done for us.")
+    assert "apologetic" in st("I'm sorry, I was wrong.")
+    assert "celebratory" in st("Here's to the bride and groom!")
+    assert "sensory" in st("The sun shone on the cold, damp grass and the wind whispered.")
+    assert "reflective" in st("I remember how life felt in those years.")
+    assert "advice" in st("Take a deep breath and begin again.")
+    assert "aphorism" in st("Love is patient and never fails.")
+    assert "archaic" in st("Thou art more lovely.")
+    assert st("He was born in 1950.") == []
+
+
 def test_fast_hybrid_search(tmp_path, monkeypatch):
     import pytest
 
@@ -54,7 +71,8 @@ def test_fast_hybrid_search(tmp_path, monkeypatch):
     con = _db(tmp_path)
     doc = Document("letters", "2", "Letters", "Someone", "https://y", "Public domain (US)", "1890",
                    ["My darling, I miss you every morning. You are always in my heart.",
-                    "The committee approved the annual budget."])
+                    "The committee approved the annual budget.",
+                    "Thank you for all your help this year."])
     index._add_doc(con, *index.prepare_doc(doc))
     con.commit()
     monkeypatch.delenv("HUMANCORPUS_SEARCH", raising=False)
@@ -68,5 +86,7 @@ def test_fast_hybrid_search(tmp_path, monkeypatch):
         assert warm and all("emotive" in h["register"] for h in warm)
         assert index.search(con, "heart", source="letters", db=db)[0]["source"] == "letters"
         assert index.search(con, "valley", source="nope", db=db) == []
+        thanks = index.search(con, "help", style="grateful", db=db)
+        assert thanks and all("grateful" in h["styles"] for h in thanks)
     finally:
         fast.reset()

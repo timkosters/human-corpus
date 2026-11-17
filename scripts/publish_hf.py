@@ -51,6 +51,7 @@ def main():
         api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
         print(f"uploading fast search sidecar {a.search}")
         api.upload_folder(repo_id=repo, repo_type="dataset", folder_path=str(a.search), path_in_repo="search",
+                          delete_patterns=["tantivy/*"],  # drop stale segments from earlier builds
                           commit_message="Fast search sidecar (Tantivy + 1-bit embeddings + register tags)")
         if a.search_only:
             return

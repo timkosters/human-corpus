@@ -40,6 +40,12 @@ Every result from this server is a verbatim human sentence with its source.
   so results are first or second person with feeling, instead of encyclopedia lines that
   merely mention the topic. register="personal" (speaks to "you"), "dialogue" and "narrative"
   also work. Each result carries its register.
+- style= narrows further, comma-separated, all must match: grateful (thank-you notes), apologetic,
+  grieving (condolences), celebratory (toasts, congratulations), sensory (vivid description),
+  reflective (looking back on life), advice (instructions, encouragement), casual (spoken voice,
+  contractions), aphorism (short general truths), archaic (thee/thou), question, exclamation.
+  Examples: a toast -> style="celebratory"; a condolence card -> style="grieving";
+  a wedding speech -> style="aphorism" for the closing line.
 - Pass like="<a sentence in the voice you want>" to rank by closeness to that example as well.
 - Query by feeling and situation ("miss you mornings", "proud of you"), not by genre labels
   ("love letter").

@@ -11,8 +11,10 @@ draft is made of them.
 
 ## Tools (MCP server `human-corpus`)
 
-- `search_fragments(query, limit, mode, source, min_words, max_words, phrases, register, like)`: find sentences.
+- `search_fragments(query, limit, mode, source, min_words, max_words, phrases, register, like, style)`: find sentences.
   For personal writing use `register="intimate"`; `like="<example sentence>"` ranks by tone.
+  `style=` (comma-separated): grateful, apologetic, grieving, celebratory, sensory, reflective,
+  advice, casual, aphorism, archaic, question, exclamation.
   Use short idea-level queries ("grief after a long illness"), not full prose.
   `mode="phrase"` for exact wording, `mode="raw"` for FTS5 syntax (`NEAR(a b, 5)`, `pref*`).
   `phrases=true` also returns clause-sized pieces you can splice.

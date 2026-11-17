@@ -165,7 +165,7 @@ def merge(out: Path | str, parts: list[Path | str]) -> dict:
     con.execute("INSERT INTO fragments_fts(fragments_fts) VALUES('optimize')")
     con.commit()
     con.execute("VACUUM")
-    s = stats(con)
+    s = stats(con, db=out)
     con.close()
     return s
 
@@ -238,7 +238,8 @@ def _terms(query: str) -> list[str]:
 def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "any",
            source: str | None = None, min_words: int = 4, max_words: int = 60,
            phrases: bool = False, semantic: bool = True, register: str | None = None,
-           like: str | None = None, db: Path | str | None = None) -> list[dict]:
+           like: str | None = None, db: Path | str | None = None,
+           style: str | list[str] | None = None) -> list[dict]:
     """Hybrid search when the fast sidecar exists (see fast.py), else SQLite FTS5 BM25 + rerank.
 
     register: style filter, e.g. "intimate", "personal", "dialogue" (fast sidecar only).
@@ -249,9 +250,10 @@ def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "an
 
         eng = fast.engine(db or DEFAULT_DB)
         if eng is not None:
-            rows = _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like)
+            rows = _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like,
+                           style)
             return _add_phrases(rows, query) if phrases else rows
-    if register or like:
+    if register or like or style:
         raise ValueError("register= and like= need the fast search index (humancorpus build-search)")
     match = build_match(query, mode)
     if not match:
@@ -294,12 +296,33 @@ def _fetch(con: sqlite3.Connection, ids: list[int]) -> dict[int, dict]:
     return out
 
 
-def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like) -> list[dict]:
+def _parse_styles(style, register):
+    """style accepts a name, a comma-separated string or a list; register names are allowed too."""
+    from .fast import REGISTER_FILTERS
+    from .text import STYLES
+
+    names = [s.strip().lower() for s in (style.split(",") if isinstance(style, str) else style or []) if s.strip()]
+    styles = []
+    for n in names:
+        if n in REGISTER_FILTERS and not register:
+            register = n
+        elif n in STYLES:
+            styles.append(n)
+        else:
+            raise ValueError(f"unknown style {n!r}; choose from {sorted(STYLES) + sorted(REGISTER_FILTERS)}")
+    return list(dict.fromkeys(styles)), register
+
+
+def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like,
+            style=None) -> list[dict]:
     """Tantivy BM25 + 1-bit dense candidates, exact re-embedding, blended score, MMR for variety."""
     import numpy as np
 
     from .fast import REGISTER_FILTERS
 
+    styles, register = _parse_styles(style, register)
+    if styles and not eng.has_styles:
+        raise ValueError("this search index predates style tags; rebuild with humancorpus build-search")
     if register and register not in REGISTER_FILTERS:
         raise ValueError(f"register must be one of {sorted(REGISTER_FILTERS)}")
     if source and source not in eng.sources:
@@ -308,15 +331,15 @@ def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic
     regs = REGISTER_FILTERS[register] if register else None
     max_words = min(max_words, 255)
     terms = _terms(query)
-    lex = eng.lexical(terms, mode, 300, src, min_words, max_words, regs)
+    lex = eng.lexical(terms, mode, 200, src, min_words, max_words, regs, styles)
     dense: list[int] = []
     use_dense = semantic and mode == "any"
     if semantic or like:
         qv = eng._embed([query])[0]
-        dense = eng.dense(qv, 400, src, min_words, max_words, register, regs) if use_dense else []
+        dense = eng.dense(qv, 250, src, min_words, max_words, register, regs, styles) if use_dense else []
     if like:
         lv = eng._embed([like[:1000]])[0]
-        dense = eng.dense(lv, 400, src, min_words, max_words, register, regs) + dense
+        dense = eng.dense(lv, 250, src, min_words, max_words, register, regs, styles) + dense
     ids = list(dict.fromkeys(lex + dense))
     if not ids:
         return []
@@ -361,8 +384,11 @@ def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic
 
 
 def _with_register(eng, rows: list[dict]) -> list[dict]:
-    for r, name in zip(rows, eng.register_of([r["id"] for r in rows])):
+    fids = [r["id"] for r in rows]
+    for r, name, st in zip(rows, eng.register_of(fids), eng.styles_of(fids)):
         r["register"] = name
+        if st:
+            r["styles"] = st
     return rows
 
 
@@ -443,7 +469,23 @@ def verify(con: sqlite3.Connection, text: str) -> dict:
             "human_ratio": round(human / total, 3) if total else 0.0, "results": results}
 
 
-def stats(con: sqlite3.Connection) -> dict:
+def stats(con: sqlite3.Connection, db: Path | str | None = None) -> dict:
+    """Per-source counts. Uses the fast-search sidecar when present (a full scan takes ~1 min at 40M rows)."""
+    from . import fast
+
+    eng = fast.engine(db or DEFAULT_DB)
+    if eng is not None:
+        docs = eng.manifest.get("docs") or {r[0]: (r[1], r[2]) for r in con.execute(
+            "SELECT source, max(license), count(*) FROM docs GROUP BY source")}
+        import numpy as np
+
+        counts = np.bincount(eng.meta[:, 1], minlength=len(eng.sources))
+        out = [{"source": s, "license": docs.get(s, ("", 0))[0], "docs": docs.get(s, ("", 0))[1],
+                "fragments": int(counts[i])} for i, s in enumerate(eng.sources)]
+        from .text import STYLES
+        styles = {n: int(np.count_nonzero(eng.styles & (1 << i))) for i, n in enumerate(STYLES)} \
+            if eng.has_styles else {}
+        return {"sources": out, "styles": styles}
     by_source = con.execute(
         "SELECT d.source, d.license, count(DISTINCT d.id) docs, count(f.id) fragments "
         "FROM docs d LEFT JOIN fragments f ON f.doc_id=d.id GROUP BY d.source, d.license"
