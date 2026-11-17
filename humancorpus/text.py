@@ -138,3 +138,90 @@ def register_code(s: str) -> int:
 def register_name(code: int) -> str:
     name = REGISTERS[code & 7]
     return name + ("+emotive" if code & EMOTIVE_BIT else "")
+
+
+# --------------------------------------------------------------------------- #
+# Style tags: multi-label, lexicon and pattern based. Each was spot-checked on samples of the
+# published corpus and kept only if most tagged sentences fit. Stored as a bitmask.
+# --------------------------------------------------------------------------- #
+STYLES = ["grateful", "apologetic", "grieving", "celebratory", "sensory", "reflective", "advice",
+          "casual", "aphorism", "archaic", "question", "exclamation"]
+STYLE_BIT = {name: 1 << i for i, name in enumerate(STYLES)}
+
+_GRATEFUL = set("thank thanks thankful grateful gratitude gratefully appreciate indebted".split())
+_APOLOGY = re.compile(r"\b(i am sorry|i'm sorry|i was sorry|forgive me|pardon me|i apologi[sz]e|my apologies|"
+                      r"i beg your pardon|i regret|my fault|i was wrong)\b", re.I)
+_GRIEF = set("sorrow grief grieve grieving mourn mourning comfort comforted condolence condolences "
+             "sympathy bereaved bereavement heal healing".split())
+_GRIEF_PAT = re.compile(r"\b(you are not alone|in our thoughts|in my thoughts|deepest sympathy|sorry for your loss|"
+                        r"rest in peace|time heals|(your|our|his|her|their|my) (sad |great |terrible )?loss|be comforted|take comfort|my heart goes out|thinking of you)\b", re.I)
+_CELEB = set("congratulate congratulations congratulation congratulated celebrate celebration rejoice hurrah "
+             "hooray huzzah toast bravo".split())
+_CELEB_PAT = re.compile(r"\b(here's to|let us drink|raise (a|our|your) glass|well done|happy birthday|"
+                        r"many happy returns)\b", re.I)
+_ARCHAIC = set("thee thou thy thine hath doth thyself 'tis 'twas wherefore hither thither shalt wilt canst "
+               "dost thou'rt".split())
+_SIGHT = set("""red blue green yellow golden gold silver white black grey gray crimson scarlet purple violet amber
+pale dark bright light shadow shadows glow glowed gleam gleamed shimmer shimmering glitter sparkle sparkled shining
+shone dim dusk dawn twilight""".split())
+_SENSE = set("""smell smelled scent scented fragrance fragrant perfume odor odour aroma stench sweet bitter sour salty
+taste tasted sound sounds sounded hum hummed whisper whispered rustle rustled roar roared murmur murmured echo echoed
+silence silent loud crackle creak creaked soft rough smooth warm cold cool damp wet dry silky velvet icy hot chill
+chilly breeze wind rain mist fog snow sun sunlight moonlight""".split())
+_REFLECT = set("remember remembered recall think thought wonder wondered realize realized realise realised believe "
+               "believed suppose imagine imagined understand understood know knew learned learnt reflect "
+               "reflected".split())
+_ABSTRACT = set("life lives time years memory memories past youth age death world meaning".split())
+_IMPER = set("""don't let take give make go come try remember be keep stop look listen think consider imagine write
+tell ask use put place add mix stir cut hold turn open close find choose avoid follow note see read start begin
+leave bring help""".split())
+_CONTRACTION = re.compile(r"\b\w+n't\b|\b(i'm|you're|we're|they're|i've|you've|we've|i'll|you'll|we'll|i'd|you'd|"
+                          r"it's|that's|there's|what's|let's|he's|she's)\b", re.I)
+_APH_START = re.compile(r"(he who|she who|those who|whoever|no man|every man|a man |men |love |life |nothing |"
+                        r"truth |a friend|friends |happiness|wisdom|the man who|the heart|a good |a wise |"
+                        r"there is no|there is nothing)", re.I)
+_APH_VERB = re.compile(r"\b(is|are|never|always|cannot|can't|must|makes|has|have|lies)\b", re.I)
+_PAST = re.compile(r"\b(was|were|had|did)\b", re.I)
+_PRON = _FIRST | _SECOND | _THIRD
+
+
+def style_mask(s: str) -> int:
+    """Bitmask over STYLES."""
+    words = [w.lower() for w in _WORD.findall(s)]
+    ws = set(words)
+    low = s.lower()
+    end = s.rstrip("\"'”’)")
+    m = 0
+    if (ws & _GRATEFUL and ws & (_FIRST | _SECOND) and "thanks to" not in low) or "thank you" in low:
+        m |= STYLE_BIT["grateful"]
+    if _APOLOGY.search(s):
+        m |= STYLE_BIT["apologetic"]
+    if _GRIEF_PAT.search(s) or (ws & _GRIEF and ws & _SECOND and ws & _FIRST):
+        m |= STYLE_BIT["grieving"]
+    if _CELEB_PAT.search(s) or (ws & _CELEB and ws & (_FIRST | _SECOND)):
+        m |= STYLE_BIT["celebratory"]
+    if sum(w in _SIGHT or w in _SENSE for w in words) >= 3 and ws & _SIGHT and ws & _SENSE:
+        m |= STYLE_BIT["sensory"]
+    if ws & _FIRST and ws & _REFLECT and ws & _ABSTRACT:
+        m |= STYLE_BIT["reflective"]
+    first, second = (words + ["", ""])[:2]
+    if (first in _IMPER and not end.endswith("?") and second not in _PRON) or \
+            re.search(r"\byou (should|must|ought to|need to)\b", s, re.I):
+        m |= STYLE_BIT["advice"]
+    if _CONTRACTION.search(s) and len(words) <= 20 and ws & (_FIRST | _SECOND):
+        m |= STYLE_BIT["casual"]
+    body = s.lstrip("\"'“‘")
+    if len(words) <= 18 and _APH_START.match(body) and _APH_VERB.search(s) and not _PAST.search(s) \
+            and not re.search(r"[A-Z]", body[1:]):
+        m |= STYLE_BIT["aphorism"]
+    if ws & _ARCHAIC:
+        m |= STYLE_BIT["archaic"]
+    if end.endswith("?"):
+        m |= STYLE_BIT["question"]
+    if end.endswith("!"):
+        m |= STYLE_BIT["exclamation"]
+    return m
+
+
+def style_names(mask: int) -> list[str]:
+    return [n for n in STYLES if mask & STYLE_BIT[n]]

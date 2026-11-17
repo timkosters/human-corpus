@@ -37,11 +37,14 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--no-semantic", action="store_true", help="plain BM25, skip embedding rerank")
     s.add_argument("--register", help="style filter, e.g. intimate, personal, dialogue")
     s.add_argument("--like", help="example sentence whose tone results should match")
+    s.add_argument("--style", help="comma-separated style tags, e.g. grateful,casual")
     s.add_argument("--json", action="store_true")
 
     b = sub.add_parser("build-search", help="build the fast search sidecar (Tantivy + 1-bit embeddings)")
     b.add_argument("--out", type=Path, default=None, help="output dir (default: search/ next to --db)")
     b.add_argument("--ivf-only", action="store_true", help="only (re)build the IVF index over existing bits")
+    b.add_argument("--tags-only", action="store_true",
+                   help="keep existing vectors/IVF, rebuild tags + Tantivy (after tagger changes)")
 
     v = sub.add_parser("verify", help="check a draft (file or stdin) against the corpus")
     v.add_argument("file", nargs="?")
@@ -64,17 +67,17 @@ def main(argv: list[str] | None = None) -> None:
         if a.ivf_only:
             print(json.dumps(fast.build_ivf(a.out or fast.default_dir(a.db)), indent=2))
         else:
-            print(json.dumps(fast.build(a.db, a.out), indent=2))
+            print(json.dumps(fast.build(a.db, a.out, vectors=not a.tags_only), indent=2))
     elif a.cmd == "merge":
         print(json.dumps(index.merge(a.db, a.parts), indent=2))
     elif a.cmd == "search":
         rows = index.search(index.connect(a.db, readonly=True), a.query, limit=a.limit, mode=a.mode,
                             source=a.source, phrases=a.phrases, semantic=not a.no_semantic,
-                            register=a.register, like=a.like, db=a.db)
+                            register=a.register, like=a.like, db=a.db, style=a.style)
         if a.json:
             print(json.dumps(rows, indent=2))
         for r in rows if not a.json else []:
-            print(f"[{r['id']}] {r['text']}\n      {r['source']}: {r['title']}  {r.get('register', '')}")
+            print(f"[{r['id']}] {r['text']}\n      {r['source']}: {r['title']}  {r.get('register', '')} {','.join(r.get('styles', []))}")
             for ph in r.get("phrases", []):
                 print(f"        > {ph}")
     elif a.cmd == "verify":
@@ -89,7 +92,7 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"{mark:7} {r['sentence']}{src}")
             print(f"\n{res['human_verified']}/{res['sentences']} sentences verified human ({res['human_ratio']:.0%})")
     elif a.cmd == "stats":
-        print(json.dumps(index.stats(index.connect(a.db, readonly=True)), indent=2))
+        print(json.dumps(index.stats(index.connect(a.db, readonly=True), db=a.db), indent=2))
     elif a.cmd == "serve":
         import os
         os.environ["HUMANCORPUS_DB"] = str(a.db)

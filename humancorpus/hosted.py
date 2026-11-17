@@ -20,10 +20,10 @@ def ensure_db() -> Path:
 
 def ensure_search(db: Path) -> None:
     """Fetch the fast-search sidecar (search/) if the dataset has one. Optional: FTS5 is the fallback."""
-    from .fast import default_dir
 
-    if (default_dir(db) / "manifest.json").exists() or os.environ.get("HUMANCORPUS_NO_FAST"):
+    if os.environ.get("HUMANCORPUS_NO_FAST"):
         return
+    # Always sync: snapshot_download only fetches files that changed since the last download.
     try:
         from huggingface_hub import snapshot_download
 
