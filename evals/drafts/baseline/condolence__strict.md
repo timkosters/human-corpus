@@ -1,0 +1,1 @@
+But I am so sorry for your loss. I need not tell you how deeply I feel this sad bereavement. Deeply as I regret him, I know your grief is greater still, for you knew him far better even than I did. If there is anything you desire, you will let me know?

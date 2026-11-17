@@ -1,0 +1,1 @@
+Dear Maria, thank you for all your kindness while I was in hospital. Knowing Biscuit was with you, fed and walked and spoiled, was the one thing I did not have to worry about. You do not know how grateful I feel. I have no idea how to repay you, so for now please accept my gratitude, a cake, and an open offer to return the favour whenever you need it.

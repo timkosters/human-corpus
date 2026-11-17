@@ -1,0 +1,1 @@
+Thank you for all your kindness. I had been ill--very--a long while ... Indeed, you do not know how grateful I feel. Unhappily I have never been able to repay this debt, unless my gratitude be accounted repayment.

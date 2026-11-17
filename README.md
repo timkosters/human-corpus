@@ -127,3 +127,9 @@ Scaling path:
 ## License
 
 Code: MIT. Corpus text keeps its source license (see above).
+
+## Evals
+
+`python -m evals.run` scores the server on 12 drafting tasks (latency, tag precision, clean rate, labeled
+relevance, verify_draft human_ratio, judged draft quality) and diffs against a saved baseline. See
+[evals/README.md](evals/README.md) and the baseline in [evals/FINDINGS.md](evals/FINDINGS.md).

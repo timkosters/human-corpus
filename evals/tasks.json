@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "notes": "Drafting tasks. Each query mirrors what a model following guide://compose would send. expect = tags every result should carry (register or style). Edit freely; bump version when queries change so baselines are not compared across versions.",
+  "tasks": [
+    {"id": "love_letter", "brief": "A short love letter to a long-term partner who is away for a month. Warm, specific, not cheesy.",
+     "queries": [
+       {"query": "miss you every morning", "register": "intimate"},
+       {"query": "the house is quiet without you", "register": "intimate"},
+       {"query": "counting the days until you come home", "register": "intimate", "like": "I think about you every morning"}
+     ]},
+    {"id": "thank_you_note", "brief": "A thank-you note to a neighbour who looked after my dog while I was in hospital.",
+     "queries": [
+       {"query": "thank you for your kindness", "style": "grateful"},
+       {"query": "I do not know how to repay you", "style": "grateful"},
+       {"query": "looked after him while I was ill", "register": "intimate"}
+     ]},
+    {"id": "condolence", "brief": "A condolence card to a colleague whose father died after a long illness.",
+     "queries": [
+       {"query": "sorry for your loss", "style": "grieving"},
+       {"query": "he will be deeply missed", "style": "grieving"},
+       {"query": "thinking of you and your family", "register": "personal"}
+     ]},
+    {"id": "birthday_toast", "brief": "A two-minute toast for a best friend's 40th birthday party.",
+     "queries": [
+       {"query": "raise a glass to an old friend", "style": "celebratory"},
+       {"query": "the years have been kind to you", "register": "personal"},
+       {"query": "here is to many more years", "style": "celebratory"}
+     ]},
+    {"id": "wedding_speech", "brief": "Best-man wedding speech: how the couple met, what marriage means, closing toast.",
+     "queries": [
+       {"query": "the day they first met", "register": "narrative"},
+       {"query": "love is patient", "style": "aphorism"},
+       {"query": "may your life together be happy", "style": "celebratory"}
+     ]},
+    {"id": "apology", "brief": "An apology to a sibling for missing their graduation.",
+     "queries": [
+       {"query": "I am so sorry I was not there", "style": "apologetic"},
+       {"query": "I let you down", "register": "intimate"},
+       {"query": "I hope you can forgive me", "style": "apologetic"}
+     ]},
+    {"id": "cover_letter", "brief": "Cover letter opening and closing for a museum education role. Professional, sincere.",
+     "queries": [
+       {"query": "I am writing to apply for the position", "register": "first_person"},
+       {"query": "passion for teaching children about history", "register": "first_person"},
+       {"query": "I look forward to hearing from you", "register": "personal"}
+     ]},
+    {"id": "retirement_card", "brief": "A retirement card for a mentor after 35 years at the same school.",
+     "queries": [
+       {"query": "you have earned your rest", "register": "personal"},
+       {"query": "you taught me more than you know", "style": "grateful"},
+       {"query": "enjoy the years ahead", "style": "celebratory"}
+     ]},
+    {"id": "eulogy", "brief": "A eulogy for a grandmother who loved gardening and fed everyone who visited.",
+     "queries": [
+       {"query": "she loved her garden", "register": "narrative"},
+       {"query": "her kitchen was always full", "style": "reflective"},
+       {"query": "death is not the end", "style": "aphorism"}
+     ]},
+    {"id": "congratulations_baby", "brief": "A card congratulating friends on the birth of their first child.",
+     "queries": [
+       {"query": "welcome to the world little one", "style": "celebratory"},
+       {"query": "your lives will never be the same", "register": "personal"},
+       {"query": "a child is a gift", "style": "aphorism"}
+     ]},
+    {"id": "nature_description", "brief": "A paragraph describing an autumn walk by a river at dusk, for a personal essay.",
+     "queries": [
+       {"query": "leaves falling on the river at dusk", "style": "sensory"},
+       {"query": "the light fading over the water", "style": "sensory"},
+       {"query": "cold air smelled of smoke", "style": "sensory"}
+     ]},
+    {"id": "encouragement", "brief": "A note encouraging a friend who just failed their bar exam to try again.",
+     "queries": [
+       {"query": "do not give up", "style": "advice"},
+       {"query": "failure is not the end", "style": "aphorism"},
+       {"query": "I believe in you", "register": "intimate"}
+     ]}
+  ]
+}
