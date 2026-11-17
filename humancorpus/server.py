@@ -87,7 +87,7 @@ def verify_draft(text: str) -> dict:
     Each sentence gets status "exact" (verbatim human sentence), "contained" (verbatim inside a
     human sentence) or "not_found". human_ratio is the share of sentences that are human-sourced.
     """
-    return index.verify(con(), text[:MAX_VERIFY_CHARS])
+    return index.verify(con(), text[:MAX_VERIFY_CHARS], db=DB)
 
 
 @mcp.tool()

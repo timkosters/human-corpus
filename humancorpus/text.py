@@ -225,3 +225,40 @@ def style_mask(s: str) -> int:
 
 def style_names(mask: int) -> list[str]:
     return [n for n in STYLES if mask & STYLE_BIT[n]]
+
+
+# --------------------------------------------------------------------------- #
+# Display cleanup: quotation debris left by sentence splitting. The cleaned text is always
+# verbatim inside the stored sentence, so verify_draft still finds it ("contained").
+# --------------------------------------------------------------------------- #
+_DQ = '"“”'
+_OPEN = '"“‘\''
+_CLOSE = '"”’\''
+
+
+def clean_quotes(s: str) -> str:
+    """Drop unbalanced or wrapping quote marks at the ends of a sentence: `And I miss you."` -> `And I miss you.`"""
+    t = s.strip()
+    for _ in range(3):
+        before = t
+        n_dq = sum(t.count(c) for c in _DQ)
+        # A whole sentence in quotes: "I hope you forgive me." -> I hope you forgive me.
+        if len(t) > 2 and t[0] in _OPEN and t[-1] in _CLOSE and n_dq in (0, 2) and \
+                not any(c in t[1:-1] for c in _DQ):
+            t = t[1:-1].strip()
+        elif n_dq % 2:
+            if t[-1] in _DQ:
+                t = t[:-1].rstrip()
+            elif len(t) > 1 and t[-2] in _DQ and t[-1] in ".!?)":
+                t = t[:-2] + t[-1]
+            elif t[0] in _DQ:
+                t = t[1:].lstrip()
+        elif t[-1:] in "'’" and t[-2:-1] in ".!?," and t[:1] not in "'‘":
+            t = t[:-1]
+        elif t[:1] in "'‘" and t[-1:] not in "'’":
+            t = t[1:].lstrip()
+        if t == before:
+            break
+    if t.endswith(")") and "(" not in t:
+        t = t[:-1]
+    return t or s

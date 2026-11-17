@@ -85,6 +85,6 @@ class MCPClient:
         texts = [c.get("text", "") for c in res.get("content", []) if c.get("type") == "text"]
         try:
             parsed = [json.loads(t) for t in texts]
-            return (parsed[0] if len(parsed) == 1 and not isinstance(parsed[0], dict) else parsed), dt
+            return (parsed[0] if len(parsed) == 1 else parsed), dt
         except json.JSONDecodeError:
             return "\n".join(texts), dt

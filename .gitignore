@@ -5,3 +5,4 @@ __pycache__/
 *.parquet
 .venv/
 evals/results/
+evals/grading/

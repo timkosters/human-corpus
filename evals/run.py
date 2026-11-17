@@ -2,7 +2,8 @@
 
   python -m evals.run                         # retrieval + service metrics vs the live server
   python -m evals.run --server http://127.0.0.1:7860/mcp   # a local server (humancorpus serve --http)
-  python -m evals.run --judge                 # label unseen results with Claude (cached in labels.jsonl)
+  python -m evals.run --judge                 # label unseen results with Claude via the API (cached in labels.jsonl)
+  python -m evals.grade export                # no API key: export unseen results for an in-session Claude to grade
   python -m evals.run --drafts evals/drafts/baseline       # score saved drafts (verify + judge)
   python -m evals.run --compose               # Claude writes fresh drafts via the MCP tools, then scores them
   python -m evals.run --save-baseline         # make this run the new baseline
@@ -244,6 +245,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"drafts: scoring {draft_dir} ...", file=sys.stderr)
         result["drafts"] = drafts(client, {t["id"]: t for t in tasks}, draft_dir, a.judge or a.compose)
     result["meta"]["wall_s"] = round(time.perf_counter() - t0, 1)
+    if "retrieval" in result and result["retrieval"]["summary"]["label_coverage"] < 1 and not a.judge:
+        print("some results are unlabeled: `python -m evals.grade export`, grade, `python -m evals.grade ingest FILE`,"
+              " then rerun", file=sys.stderr)
 
     base_path = Path(a.baseline)
     base = json.loads(base_path.read_text()) if base_path.exists() else None

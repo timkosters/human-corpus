@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"        > {ph}")
     elif a.cmd == "verify":
         text = Path(a.file).read_text() if a.file else sys.stdin.read()
-        res = index.verify(index.connect(a.db, readonly=True), text)
+        res = index.verify(index.connect(a.db, readonly=True), text, db=a.db)
         if a.json:
             print(json.dumps(res, indent=2))
         else:

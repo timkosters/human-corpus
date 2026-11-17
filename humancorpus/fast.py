@@ -292,6 +292,18 @@ class Engine:
         rows = rows[self._allowed(rows, source_code, min_words, max_words, reg_codes, smask)]
         return [int(x) for x in self.ids[rows]]
 
+    def phrase(self, tokens: list[str], k: int = 50) -> list[int]:
+        """Fragment ids containing these tokens as a phrase (stemmed). Used by verify: milliseconds,
+        where an FTS5 phrase query over 40M rows takes seconds on a slow disk."""
+        # Tantivy's tokenizer splits on apostrophes ("don't" -> don, t), so do the same.
+        q = _tantivy_query([p for t in tokens for p in t.split("'") if p], "phrase")
+        if q == '""':
+            return []
+        with self.lock:
+            searcher = self.tindex.searcher()
+            hits = searcher.search(self.tindex.parse_query(q, ["text"]), k, count=False).hits
+            return [searcher.doc(addr)["id"][0] for _, addr in hits]
+
     def register_of(self, fids: list[int]) -> list[str]:
         rows = self._rows_for_ids(fids)
         return [register_name(int(c)) for c in self.meta[rows, 2]]
