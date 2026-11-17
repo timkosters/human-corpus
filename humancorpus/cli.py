@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> None:
 
     b = sub.add_parser("build-search", help="build the fast search sidecar (Tantivy + 1-bit embeddings)")
     b.add_argument("--out", type=Path, default=None, help="output dir (default: search/ next to --db)")
+    b.add_argument("--ivf-only", action="store_true", help="only (re)build the IVF index over existing bits")
 
     v = sub.add_parser("verify", help="check a draft (file or stdin) against the corpus")
     v.add_argument("file", nargs="?")
@@ -60,7 +61,10 @@ def main(argv: list[str] | None = None) -> None:
                                       optimize=not a.no_optimize), indent=2))
     elif a.cmd == "build-search":
         from . import fast
-        print(json.dumps(fast.build(a.db, a.out), indent=2))
+        if a.ivf_only:
+            print(json.dumps(fast.build_ivf(a.out or fast.default_dir(a.db)), indent=2))
+        else:
+            print(json.dumps(fast.build(a.db, a.out), indent=2))
     elif a.cmd == "merge":
         print(json.dumps(index.merge(a.db, a.parts), indent=2))
     elif a.cmd == "search":

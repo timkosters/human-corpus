@@ -7,6 +7,7 @@ These are sidecar files derived from corpus.db, so the SQLite schema is unchange
         tantivy/        BM25 index (block-max WAND top-k, stops early on common words)
         ids.npy         fragment id per row (uint32, sorted)
         bits.npy        sign bits of the potion embedding, 32 bytes per sentence
+        bits.ivf        inverted-file index over bits (corpora of 1M+ rows)
         meta.npy        per row: words, source code, register code (uint8 each)
         mean.npy        embedding mean, subtracted before taking signs
 
@@ -124,9 +125,31 @@ def build(db: Path | str, out: Path | str | None = None, batch: int = 50_000,
         a.flush()
     manifest = {"rows": row, "sources": sources, "model": MODEL, "dim": int(dim), "registers": REGISTERS,
                 "built_from": db.name, "seconds": round(time.time() - t0, 1)}
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     con.close()
+    if row >= 1_000_000:
+        manifest["ivf"] = build_ivf(out)
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     return manifest
+
+
+def build_ivf(out: Path | str, nlist: int | None = None, train_n: int = 500_000) -> dict:
+    """Inverted-file index over the 1-bit vectors: scans ~1% of rows per query instead of all."""
+    import faiss
+
+    out = Path(out)
+    bits = np.load(out / "bits.npy", mmap_mode="r")
+    n, nbytes = bits.shape
+    nlist = nlist or int(min(16384, max(256, 4 * np.sqrt(n))))
+    t0 = time.time()
+    quant = faiss.IndexBinaryFlat(nbytes * 8)
+    ivf = faiss.IndexBinaryIVF(quant, nbytes * 8, nlist)
+    sample = np.sort(np.random.default_rng(0).choice(n, size=min(n, train_n), replace=False))
+    ivf.train(np.ascontiguousarray(bits[sample]))
+    for s in range(0, n, 2_000_000):
+        ivf.add(np.ascontiguousarray(bits[s:s + 2_000_000]))
+        print(f"build-ivf: {min(n, s + 2_000_000):,}/{n:,}", file=sys.stderr, flush=True)
+    faiss.write_index_binary(ivf, str(out / "bits.ivf"))
+    return {"nlist": nlist, "rows": n, "seconds": round(time.time() - t0, 1)}
 
 
 # --------------------------------------------------------------------------- #
@@ -153,7 +176,11 @@ class Engine:
         dim = bits.shape[1] * 8
         # Main 1-bit index, plus small ones for selective register filters (so a filtered
         # dense search scans only the matching rows).
-        self.bindex = self._binary_index(bits, None, dim)
+        if (path / "bits.ivf").exists():
+            self.bindex = faiss.read_index_binary(str(path / "bits.ivf"))
+            self.bindex.nprobe = int(os.environ.get("HUMANCORPUS_NPROBE", 96))
+        else:
+            self.bindex = self._binary_index(bits, None, dim)
         self.sub: dict[str, tuple[object, np.ndarray]] = {}
         regs = self.meta[:, 2]
         for name in ("intimate", "personal", "first_person", "dialogue", "emotive", "conversational"):
