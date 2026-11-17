@@ -4,7 +4,7 @@ FROM python:3.12-slim
 RUN useradd -m -u 1000 user
 WORKDIR /app
 COPY --chown=user . /app
-RUN pip install --no-cache-dir ".[semantic]" "huggingface_hub>=0.24" uvicorn starlette
+RUN pip install --no-cache-dir ".[semantic,fast]" "huggingface_hub>=0.24" uvicorn starlette
 
 USER user
 ENV HOME=/home/user \

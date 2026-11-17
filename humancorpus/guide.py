@@ -35,6 +35,15 @@ Every result from this server is a verbatim human sentence with its source.
 6. Call verify_draft on the final text. Replace anything not_found (strict mode).
 7. Call cite_sources with the fragment ids you used and append its output.
 
+## Matching tone, not just topic
+- Personal writing (love letters, apologies, thank-you notes, toasts): pass register="intimate"
+  so results are first or second person with feeling, instead of encyclopedia lines that
+  merely mention the topic. register="personal" (speaks to "you"), "dialogue" and "narrative"
+  also work. Each result carries its register.
+- Pass like="<a sentence in the voice you want>" to rank by closeness to that example as well.
+- Query by feeling and situation ("miss you mornings", "proud of you"), not by genre labels
+  ("love letter").
+
 ## Query tips
 - mode="phrase" finds an exact word sequence. mode="raw" accepts FTS5 syntax:
   NEAR(dark harbour, 5), lone*, rain NOT forecast.

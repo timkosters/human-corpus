@@ -230,10 +230,29 @@ def _rerank(query: str, rows: list[dict], limit: int) -> list[dict]:
     return rows[:limit]
 
 
+def _terms(query: str) -> list[str]:
+    terms = [t for t in _TOKEN.findall(query.lower()) if t not in STOPWORDS and len(t) > 1]
+    return list(dict.fromkeys(terms or _TOKEN.findall(query.lower())))
+
+
 def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "any",
            source: str | None = None, min_words: int = 4, max_words: int = 60,
-           phrases: bool = False, semantic: bool = True) -> list[dict]:
-    """BM25 search, then (if model2vec is installed) semantic rerank of the top candidates."""
+           phrases: bool = False, semantic: bool = True, register: str | None = None,
+           like: str | None = None, db: Path | str | None = None) -> list[dict]:
+    """Hybrid search when the fast sidecar exists (see fast.py), else SQLite FTS5 BM25 + rerank.
+
+    register: style filter, e.g. "intimate", "personal", "dialogue" (fast sidecar only).
+    like: an example sentence whose tone results should resemble (fast sidecar only).
+    """
+    if mode != "raw":
+        from . import fast
+
+        eng = fast.engine(db or DEFAULT_DB)
+        if eng is not None:
+            rows = _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like)
+            return _add_phrases(rows, query) if phrases else rows
+    if register or like:
+        raise ValueError("register= and like= need the fast search index (humancorpus build-search)")
     match = build_match(query, mode)
     if not match:
         return []
@@ -253,19 +272,106 @@ def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "an
     rows = [_row(r) for r in con.execute(sql, args)]
     if use_sem:
         rows = _rerank(query, rows, limit)
-    if phrases:
-        terms = {t for t in _TOKEN.findall(query.lower()) if t not in STOPWORDS}
-        for r in rows:
-            cl = clauses(r["text"])
-            r["phrases"] = sorted(cl, key=lambda c: -len(terms & set(_TOKEN.findall(c.lower()))))[:3]
+    return _add_phrases(rows, query) if phrases else rows
+
+
+def _add_phrases(rows: list[dict], query: str) -> list[dict]:
+    terms = {t for t in _TOKEN.findall(query.lower()) if t not in STOPWORDS}
+    for r in rows:
+        cl = clauses(r["text"])
+        r["phrases"] = sorted(cl, key=lambda c: -len(terms & set(_TOKEN.findall(c.lower()))))[:3]
+    return rows
+
+
+def _fetch(con: sqlite3.Connection, ids: list[int]) -> dict[int, dict]:
+    out: dict[int, dict] = {}
+    for s in range(0, len(ids), 900):
+        part = ids[s:s + 900]
+        q = ",".join("?" * len(part))
+        for r in con.execute(f"SELECT {_FRAG_COLS} FROM fragments f JOIN docs d ON d.id=f.doc_id "
+                             f"WHERE f.id IN ({q})", part):
+            out[r["id"]] = _row(r)
+    return out
+
+
+def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like) -> list[dict]:
+    """Tantivy BM25 + 1-bit dense candidates, exact re-embedding, blended score, MMR for variety."""
+    import numpy as np
+
+    from .fast import REGISTER_FILTERS
+
+    if register and register not in REGISTER_FILTERS:
+        raise ValueError(f"register must be one of {sorted(REGISTER_FILTERS)}")
+    if source and source not in eng.sources:
+        return []
+    src = eng.sources.index(source) if source else None
+    regs = REGISTER_FILTERS[register] if register else None
+    max_words = min(max_words, 255)
+    terms = _terms(query)
+    lex = eng.lexical(terms, mode, 300, src, min_words, max_words, regs)
+    dense: list[int] = []
+    use_dense = semantic and mode == "any"
+    if semantic or like:
+        qv = eng._embed([query])[0]
+        dense = eng.dense(qv, 400, src, min_words, max_words, register, regs) if use_dense else []
+    if like:
+        lv = eng._embed([like[:1000]])[0]
+        dense = eng.dense(lv, 400, src, min_words, max_words, register, regs) + dense
+    ids = list(dict.fromkeys(lex + dense))
+    if not ids:
+        return []
+    found = _fetch(con, ids)
+    rows = [found[i] for i in ids if i in found]
+    if not semantic and not like:
+        return _with_register(eng, rows[:limit])
+    vecs = eng._embed([r["text"] for r in rows])
+    vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9
+
+    def unit(v):
+        return v / (np.linalg.norm(v) + 1e-9)
+
+    sim_q = vecs @ unit(qv)
+    lex_rank = {fid: i for i, fid in enumerate(lex)}
+    lex_s = np.array([1 - lex_rank[r["id"]] / len(lex) if r["id"] in lex_rank else 0.0 for r in rows])
+    if like:
+        sim_l = vecs @ unit(lv)
+        score = 0.5 * sim_q + 0.35 * sim_l + 0.15 * lex_s
+    else:
+        score = 0.7 * sim_q + 0.3 * lex_s
+    # MMR: take the best, then penalise candidates that say nearly the same thing.
+    chosen: list[int] = []
+    maxsim = np.full(len(rows), -1.0)
+    for _ in range(min(limit, len(rows))):
+        mmr = 0.8 * score - 0.2 * maxsim
+        mmr[chosen] = -np.inf
+        mmr[maxsim > 0.93] = -np.inf
+        best = int(np.argmax(mmr))
+        if mmr[best] == -np.inf:
+            break
+        chosen.append(best)
+        maxsim = np.maximum(maxsim, vecs @ vecs[best])
+    out = []
+    for i in chosen:
+        r = rows[i]
+        r["similarity"] = round(float(sim_q[i]), 3)
+        if like:
+            r["style_similarity"] = round(float(sim_l[i]), 3)
+        out.append(r)
+    return _with_register(eng, out)
+
+
+def _with_register(eng, rows: list[dict]) -> list[dict]:
+    for r, name in zip(rows, eng.register_of([r["id"] for r in rows])):
+        r["register"] = name
     return rows
 
 
 def random_fragments(con: sqlite3.Connection, n: int = 5, query: str | None = None,
-                     source: str | None = None, min_words: int = 6, max_words: int = 40) -> list[dict]:
+                     source: str | None = None, min_words: int = 6, max_words: int = 40,
+                     db: Path | str | None = None) -> list[dict]:
     if query:
         rows = search(con, query, limit=200, source=source, min_words=min_words, max_words=max_words,
-                      semantic=False)
+                      semantic=False, db=db)
         import random
         random.shuffle(rows)
         return rows[:n]

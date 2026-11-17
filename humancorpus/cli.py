@@ -35,7 +35,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--source")
     s.add_argument("--phrases", action="store_true")
     s.add_argument("--no-semantic", action="store_true", help="plain BM25, skip embedding rerank")
+    s.add_argument("--register", help="style filter, e.g. intimate, personal, dialogue")
+    s.add_argument("--like", help="example sentence whose tone results should match")
     s.add_argument("--json", action="store_true")
+
+    b = sub.add_parser("build-search", help="build the fast search sidecar (Tantivy + 1-bit embeddings)")
+    b.add_argument("--out", type=Path, default=None, help="output dir (default: search/ next to --db)")
 
     v = sub.add_parser("verify", help="check a draft (file or stdin) against the corpus")
     v.add_argument("file", nargs="?")
@@ -53,15 +58,19 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(index.ingest(a.source, a.db, shards=a.shards, max_docs=a.max_docs,
                                       profile=a.profile, shard_ids=a.shard_ids, workers=a.workers,
                                       optimize=not a.no_optimize), indent=2))
+    elif a.cmd == "build-search":
+        from . import fast
+        print(json.dumps(fast.build(a.db, a.out), indent=2))
     elif a.cmd == "merge":
         print(json.dumps(index.merge(a.db, a.parts), indent=2))
     elif a.cmd == "search":
         rows = index.search(index.connect(a.db, readonly=True), a.query, limit=a.limit, mode=a.mode,
-                            source=a.source, phrases=a.phrases, semantic=not a.no_semantic)
+                            source=a.source, phrases=a.phrases, semantic=not a.no_semantic,
+                            register=a.register, like=a.like, db=a.db)
         if a.json:
             print(json.dumps(rows, indent=2))
         for r in rows if not a.json else []:
-            print(f"[{r['id']}] {r['text']}\n      {r['source']}: {r['title']}")
+            print(f"[{r['id']}] {r['text']}\n      {r['source']}: {r['title']}  {r.get('register', '')}")
             for ph in r.get("phrases", []):
                 print(f"        > {ph}")
     elif a.cmd == "verify":

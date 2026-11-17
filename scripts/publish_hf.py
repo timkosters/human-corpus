@@ -35,16 +35,29 @@ or download `corpus.db` and run `humancorpus --db corpus.db serve`.
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--user", default="timourxyz")
-    ap.add_argument("--db", type=Path, required=True)
+    ap.add_argument("--db", type=Path, default=None)
     ap.add_argument("--name", default="human-corpus")
     ap.add_argument("--space-only", action="store_true")
+    ap.add_argument("--search", type=Path, default=None,
+                    help="upload a fast-search sidecar dir (from `humancorpus build-search`) as search/")
+    ap.add_argument("--search-only", action="store_true", help="only upload --search, skip db and Space")
     ap.add_argument("--hardware", default=None, help="e.g. cpu-upgrade ($0.03/h); default free cpu-basic")
     a = ap.parse_args()
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_TOKEN")
     api = HfApi(token=token)
     repo = f"{a.user}/{a.name}"
 
+    if a.search:
+        api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
+        print(f"uploading fast search sidecar {a.search}")
+        api.upload_folder(repo_id=repo, repo_type="dataset", folder_path=str(a.search), path_in_repo="search",
+                          commit_message="Fast search sidecar (Tantivy + 1-bit embeddings + register tags)")
+        if a.search_only:
+            return
+
     if not a.space_only:
+        if a.db is None:
+            ap.error("--db is required unless --space-only or --search-only")
         api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
         api.upload_file(path_or_fileobj=DATASET_CARD.format(user=a.user).encode(), path_in_repo="README.md",
                         repo_id=repo, repo_type="dataset")

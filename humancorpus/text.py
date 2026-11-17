@@ -92,3 +92,49 @@ def is_reusable(s: str, max_caps: float = 0.15) -> bool:
         return False
     caps = sum(1 for w in words[1:] if w.lstrip('"\'(\u201c\u2018')[:1].isupper() and w.lower() != "i")
     return caps / len(words) <= max_caps
+
+
+# --------------------------------------------------------------------------- #
+# Register (style) tags, used to find sentences that *sound* right, not just match a topic.
+# --------------------------------------------------------------------------- #
+REGISTERS = ["expository", "narrative", "dialogue", "first_person", "personal"]
+EMOTIVE_BIT = 8  # added to the register code when the sentence carries feeling words
+
+_FIRST = {"i", "me", "my", "mine", "myself", "we", "us", "our", "ours", "ourselves"}
+_SECOND = {"you", "your", "yours", "yourself", "yourselves", "thee", "thou", "thy", "thine", "ye"}
+_THIRD = {"he", "she", "him", "her", "his", "hers", "himself", "herself", "they", "them", "their"}
+_EMOTIVE = set("""
+love loved loves loving lover lovers beloved dear dearest darling sweet sweetheart heart hearts tender
+tenderly tenderness kiss kissed kisses embrace embraced longing long longed yearn yearned yearning miss
+missed missing adore adored adoring cherish cherished devotion devoted passion passionate desire desired
+joy joyful happy happiness glad delight delighted bliss grateful gratitude thankful hope hoped hopes
+hopeful sorrow sorrowful grief grieve grieved mourn mourned tears tear weep wept cry cried lonely
+loneliness alone afraid fear feared fears ache ached aching pain hurt hurts sad sadness regret regretted
+sorry forgive forgave forgiven forgiveness promise promised forever always soul souls warm warmth gentle
+gently smile smiled smiles laugh laughed laughter dream dreamed dreams dreamt feel felt feeling feelings
+wish wished wishes proud pride ashamed shame lost comfort comforted precious treasure faithful true
+""".split())
+
+
+def register_code(s: str) -> int:
+    """0..4 = index into REGISTERS, plus EMOTIVE_BIT when the sentence uses feeling words."""
+    words = [w.lower().strip("'") for w in _WORD.findall(s)]
+    ws = set(words)
+    if ws & _SECOND:
+        code = 4  # personal: speaks to someone
+    elif ws & _FIRST:
+        code = 3
+    elif any(q in s for q in ('"', "“", "”")):
+        code = 2
+    elif ws & _THIRD:
+        code = 1
+    else:
+        code = 0
+    if ws & _EMOTIVE:
+        code |= EMOTIVE_BIT
+    return code
+
+
+def register_name(code: int) -> str:
+    name = REGISTERS[code & 7]
+    return name + ("+emotive" if code & EMOTIVE_BIT else "")

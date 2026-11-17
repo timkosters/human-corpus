@@ -25,6 +25,14 @@ Adding a source is one class in `humancorpus/sources.py`.
 - **Phrases**: search can also return clause-sized pieces of each hit for splicing.
 - **Verify**: any draft can be checked sentence by sentence: `exact` (a human sentence),
   `contained` (verbatim inside a human sentence) or `not_found`.
+- **Fast hybrid search (optional sidecar)**: `humancorpus build-search` derives a `search/` folder
+  next to `corpus.db`: a Tantivy BM25 index, 1-bit embeddings (32 bytes per sentence) and a
+  register tag per sentence. Queries then combine keyword and meaning candidates, re-embed them
+  exactly, and diversify with MMR. Tantivy stops early on common words, so keyword search stays
+  in milliseconds at 100M sentences where SQLite FTS5 slows to seconds. Install with
+  `pip install -e ".[fast]"`. Without the sidecar, SQLite FTS5 is used.
+- **Style**: `register="intimate"` (first or second person, with feeling) finds sentences that
+  fit a love letter rather than encyclopedia lines about love; `like="<example>"` ranks by tone.
 
 ## Quick start
 

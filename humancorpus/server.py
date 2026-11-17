@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import threading
+from functools import lru_cache
 from pathlib import Path
 
 try:  # mcp 2.x
@@ -30,21 +31,34 @@ def con():
 @mcp.tool()
 def search_fragments(query: str, limit: int = 10, mode: str = "any", source: str | None = None,
                      min_words: int = 4, max_words: int = 40, phrases: bool = False,
-                     semantic: bool = True) -> list[dict]:
-    """Find human-written sentences matching a query (BM25, plus semantic rerank if installed).
+                     semantic: bool = True, register: str | None = None,
+                     like: str | None = None) -> list[dict]:
+    """Find human-written sentences by topic, meaning and style (hybrid keyword + embedding search).
 
-    query: keywords or a short idea, e.g. "river flooded the valley in spring".
-    mode: "any" (default, ranked OR), "all" (every keyword), "phrase" (exact word sequence),
-          or "raw" (FTS5 syntax: NEAR, prefix*, AND/OR/NOT).
+    query: keywords or a short idea, e.g. "missing you in the morning".
+    register: style filter. "intimate" (feeling, addressed to someone or first person: love
+          letters, apologies, toasts), "personal" (speaks to "you"), "first_person", "dialogue",
+          "narrative", "expository", "emotive", "conversational". Omit for any.
+    like: an example sentence in the tone you want, e.g. "I think about you every morning".
+          Results are ranked by closeness to its style as well as to the query.
+    mode: "any" (default, hybrid), "all" (every keyword), "phrase" (exact word sequence),
+          or "raw" (SQLite FTS5 syntax: NEAR, prefix*, AND/OR/NOT; no register/like).
     source: "wikipedia" or "gutenberg" to restrict; omit for all.
     min_words/max_words: fragment length bounds.
     phrases: also return clause-sized pieces of each sentence, best match first.
-    semantic: rerank keyword hits by meaning.
-    Returns id, text, source, title, author, url, license for each fragment.
+    semantic: rank by meaning as well as keywords.
+    Returns id, text, source, title, author, url, license, register, similarity per fragment.
     """
-    return index.search(con(), query[:500], limit=max(1, min(limit, 50)), mode=mode, source=source,
-                        min_words=min_words, max_words=max_words, phrases=phrases,
-                        semantic=semantic)
+    return [dict(r) for r in _cached_search(query[:500], max(1, min(limit, 50)), mode, source, min_words,
+                                             max_words, phrases, semantic, register, (like or "")[:1000] or None)]
+
+
+@lru_cache(maxsize=4096)
+def _cached_search(*args) -> tuple:
+    query, limit, mode, source, min_words, max_words, phrases, semantic, register, like = args
+    return tuple(index.search(con(), query, limit=limit, mode=mode, source=source, min_words=min_words,
+                              max_words=max_words, phrases=phrases, semantic=semantic, register=register,
+                              like=like, db=DB))
 
 
 @mcp.tool()
@@ -56,7 +70,7 @@ def get_context(fragment_id: int, window: int = 2) -> dict:
 @mcp.tool()
 def random_fragments(n: int = 5, topic: str | None = None, source: str | None = None) -> list[dict]:
     """Random human sentences, optionally on a topic. Useful for inspiration or voice."""
-    return index.random_fragments(con(), n=max(1, min(n, 25)), query=topic, source=source)
+    return index.random_fragments(con(), n=max(1, min(n, 25)), query=topic, source=source, db=DB)
 
 
 @mcp.tool()
