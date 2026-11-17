@@ -41,7 +41,25 @@ echo "Your draft here. Another sentence." | humancorpus verify
 
 The database lives at `~/.cache/humancorpus/corpus.db` (override with `--db` or `HUMANCORPUS_DB`).
 
-## Use it from Claude
+## Hosted public MCP (Hugging Face)
+
+The public server runs as a Hugging Face Space and serves MCP over HTTP:
+
+```bash
+claude mcp add --transport http human-corpus https://timourxyz-human-corpus.hf.space/mcp
+```
+
+- The index is a public HF dataset (`timourxyz/human-corpus`), downloaded by the Space at boot.
+- The server only runs searches. It never calls an AI model, so callers' drafting uses their own
+  model, and hosting cost is flat (free CPU tier, or $0.03/h CPU upgrade to avoid sleeping).
+- Per-IP rate limit (default 60 req/min, burst 30) via `HUMANCORPUS_RATE_PER_MIN` / `HUMANCORPUS_BURST`.
+- The hosted index uses `--profile reusable`: general-purpose sentences only (no digits, few
+  proper nouns). That keeps about 40% of sentences, the ones useful for drafting.
+
+Rebuild and redeploy: `HF_TOKEN=... scripts/build_and_publish.sh` (about 3 hours on 4 cores).
+Run your own: `humancorpus serve --http --port 7860`.
+
+## Use it from Claude (local)
 
 **MCP server** (Claude Code):
 

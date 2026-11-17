@@ -19,7 +19,7 @@ def _db(tmp_path):
     doc = Document("test", "1", "Rivers", "Someone", "https://x", "CC BY-SA 3.0", "2022-03-01",
                    ["The river flooded the valley every spring. Farmers welcomed the rich silt it left behind.",
                     "In summer the water ran low and clear."])
-    index._add_doc(con, doc, 4, 80)
+    index._add_doc(con, *index.prepare_doc(doc))
     con.commit()
     return con
 

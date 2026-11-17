@@ -81,3 +81,14 @@ def clauses(sentence: str, min_words: int = 3) -> list[str]:
     """Break a sentence into phrase-sized pieces on clause punctuation."""
     parts = re.split(r"(?<=[,;:])\s+|\s+[—–-]{1,2}\s+|\s+\(|\)\s*", sentence)
     return [p.strip(" ,;:") for p in parts if p and word_count(p) >= min_words]
+
+
+def is_reusable(s: str, max_caps: float = 0.15) -> bool:
+    """General-purpose prose: few proper nouns, no digits. Drops "In 1987, Smith joined..." lines."""
+    if any(ch.isdigit() for ch in s):
+        return False
+    words = s.split()
+    if len(words) < 6 or len(words) > 45:
+        return False
+    caps = sum(1 for w in words[1:] if w.lstrip('"\'(\u201c\u2018')[:1].isupper() and w.lower() != "i")
+    return caps / len(words) <= max_caps

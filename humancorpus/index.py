@@ -6,10 +6,11 @@ import re
 import sqlite3
 import sys
 import time
+from functools import partial
 from pathlib import Path
 
 from .sources import SOURCES, Document
-from .text import clauses, fingerprint, is_good_fragment, normalize, split_sentences, word_count
+from .text import clauses, fingerprint, is_good_fragment, is_reusable, normalize, split_sentences, word_count
 
 DEFAULT_DB = Path(os.environ.get("HUMANCORPUS_DB", Path.home() / ".cache" / "humancorpus" / "corpus.db"))
 
@@ -61,31 +62,67 @@ def connect(db: Path | str = DEFAULT_DB, readonly: bool = False) -> sqlite3.Conn
 # Ingest
 # --------------------------------------------------------------------------- #
 def ingest(source: str, db: Path | str = DEFAULT_DB, shards: int = 1, max_docs: int | None = None,
-           min_words: int = 4, max_words: int = 80) -> dict:
+           min_words: int = 4, max_words: int = 80, profile: str = "all",
+           shard_ids: list[int] | None = None, optimize: bool = True, workers: int = 1) -> dict:
+    """profile="reusable" keeps only general-purpose sentences (much smaller index).
+    workers > 1 splits and filters sentences in parallel; one process writes."""
     con = connect(db)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=OFF")
     src = SOURCES[source]()
     t0 = time.time()
     n_docs = n_frag = n_dup = 0
-    for doc in src.iter_docs(shards=shards, max_docs=max_docs):
-        n, d = _add_doc(con, doc, min_words, max_words)
+    docs = src.iter_docs(shards=shards, max_docs=max_docs, shard_ids=shard_ids)
+    job = partial(prepare_doc, min_words=min_words, max_words=max_words, reusable_only=profile == "reusable")
+    pool = None
+    if workers > 1:
+        import multiprocessing as mp
+
+        pool = mp.get_context("fork").Pool(workers)
+        prepared = pool.imap(job, docs, chunksize=16)
+    else:
+        prepared = map(job, docs)
+    for doc, frags in prepared:
+        n, d = _add_doc(con, doc, frags)
         n_frag += n
         n_dup += d
         n_docs += 1
-        if n_docs % 2000 == 0:
+        if n_docs % 5000 == 0:
             con.commit()
             rate = n_docs / (time.time() - t0)
-            print(f"{source}: {n_docs:,} docs, {n_frag:,} fragments ({rate:.0f} docs/s)", file=sys.stderr)
+            print(f"{source}: {n_docs:,} docs, {n_frag:,} fragments ({rate:.0f} docs/s)", file=sys.stderr, flush=True)
+    if pool:
+        pool.close()
     con.commit()
-    con.execute("INSERT INTO fragments_fts(fragments_fts) VALUES('optimize')")
-    con.commit()
+    if optimize:
+        con.execute("INSERT INTO fragments_fts(fragments_fts) VALUES('optimize')")
+        con.commit()
     con.close()
     return {"source": source, "docs": n_docs, "fragments": n_frag, "duplicates_skipped": n_dup,
             "seconds": round(time.time() - t0, 1)}
 
 
-def _add_doc(con: sqlite3.Connection, doc: Document, min_words: int, max_words: int) -> tuple[int, int]:
+def prepare_doc(doc: Document, min_words: int = 4, max_words: int = 80,
+                reusable_only: bool = False) -> tuple[Document, list[tuple]]:
+    """Split and filter a document into (pos, words, hash, text) rows. Pure, so it parallelizes."""
+    rows = []
+    pos = 0
+    for para in doc.paragraphs:
+        for sent in split_sentences(para):
+            pos += 1
+            if not is_good_fragment(sent, min_words, max_words):
+                continue
+            if reusable_only and not is_reusable(sent):
+                continue
+            rows.append((pos, word_count(sent), fingerprint(sent), sent))
+        pos += 1  # paragraph gap, so context windows respect paragraph breaks
+    doc.paragraphs = []  # don't ship the full text back to the writer
+    return doc, rows
+
+
+def _add_doc(con: sqlite3.Connection, doc: Document, frags: list[tuple]) -> tuple[int, int]:
+    if not frags:
+        return 0, 0
     cur = con.execute(
         "INSERT OR IGNORE INTO docs(source, ext_id, title, author, url, license, date) VALUES (?,?,?,?,?,?,?)",
         (doc.source, doc.ext_id, doc.title, doc.author, doc.url, doc.license, doc.date),
@@ -93,23 +130,44 @@ def _add_doc(con: sqlite3.Connection, doc: Document, min_words: int, max_words: 
     if cur.rowcount == 0:
         return 0, 0  # already ingested
     doc_id = cur.lastrowid
-    pos = added = dups = 0
-    for para in doc.paragraphs:
-        for sent in split_sentences(para):
-            pos += 1
-            if not is_good_fragment(sent, min_words, max_words):
-                continue
-            c = con.execute(
-                "INSERT OR IGNORE INTO fragments(doc_id, pos, words, hash, text) VALUES (?,?,?,?,?)",
-                (doc_id, pos, word_count(sent), fingerprint(sent), sent),
-            )
-            if c.rowcount:
-                con.execute("INSERT INTO fragments_fts(rowid, text) VALUES (?, ?)", (c.lastrowid, sent))
-                added += 1
-            else:
-                dups += 1
-        pos += 1  # paragraph gap, so context windows respect paragraph breaks
+    added = dups = 0
+    for pos, words, h, sent in frags:
+        c = con.execute(
+            "INSERT OR IGNORE INTO fragments(doc_id, pos, words, hash, text) VALUES (?,?,?,?,?)",
+            (doc_id, pos, words, h, sent),
+        )
+        if c.rowcount:
+            con.execute("INSERT INTO fragments_fts(rowid, text) VALUES (?, ?)", (c.lastrowid, sent))
+            added += 1
+        else:
+            dups += 1
     return added, dups
+
+
+def merge(out: Path | str, parts: list[Path | str]) -> dict:
+    """Merge shard databases into one, deduplicating sentences, then build the FTS index once."""
+    con = connect(out)
+    con.execute("PRAGMA journal_mode=OFF")
+    con.execute("PRAGMA synchronous=OFF")
+    for i, part in enumerate(parts):
+        con.execute(f"ATTACH DATABASE ? AS p", (str(part),))
+        off_doc = con.execute("SELECT coalesce(max(id),0) FROM docs").fetchone()[0]
+        con.execute(
+            "INSERT OR IGNORE INTO docs(id, source, ext_id, title, author, url, license, date) "
+            "SELECT id + ?, source, ext_id, title, author, url, license, date FROM p.docs", (off_doc,))
+        con.execute(
+            "INSERT OR IGNORE INTO fragments(doc_id, pos, words, hash, text) "
+            "SELECT doc_id + ?, pos, words, hash, text FROM p.fragments ORDER BY id", (off_doc,))
+        con.commit()
+        con.execute("DETACH DATABASE p")
+        print(f"merged {part} ({i + 1}/{len(parts)})", file=sys.stderr)
+    con.execute("INSERT INTO fragments_fts(fragments_fts) VALUES('rebuild')")
+    con.execute("INSERT INTO fragments_fts(fragments_fts) VALUES('optimize')")
+    con.commit()
+    con.execute("VACUUM")
+    s = stats(con)
+    con.close()
+    return s
 
 
 # --------------------------------------------------------------------------- #

@@ -38,8 +38,12 @@ class Source:
     license: str
     shard_urls: list[str]
 
-    def iter_docs(self, shards: int, max_docs: int | None) -> Iterator[Document]:
+    def iter_docs(self, shards: int, max_docs: int | None,
+                  shard_ids: list[int] | None = None) -> Iterator[Document]:
         raise NotImplementedError
+
+    def pick(self, urls: list[str], shards: int, shard_ids: list[int] | None) -> list[str]:
+        return [urls[i] for i in shard_ids] if shard_ids is not None else urls[:shards]
 
 
 def _download(url: str) -> Path:
@@ -61,9 +65,12 @@ def _iter_parquet(urls: list[str], columns: list[str]) -> Iterator[dict]:
     import pyarrow.parquet as pq
 
     for url in urls:
-        pf = pq.ParquetFile(_download(url))
+        path = _download(url)
+        pf = pq.ParquetFile(path)
         for batch in pf.iter_batches(batch_size=256, columns=columns):
             yield from batch.to_pylist()
+        if os.environ.get("HUMANCORPUS_DELETE_DOWNLOADS"):
+            path.unlink(missing_ok=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -85,9 +92,10 @@ class Wikipedia(Source):
             shard_urls=[f"{base}/train-{i:05d}-of-00041.parquet" for i in range(41)],
         )
 
-    def iter_docs(self, shards: int, max_docs: int | None) -> Iterator[Document]:
+    def iter_docs(self, shards: int, max_docs: int | None,
+                  shard_ids: list[int] | None = None) -> Iterator[Document]:
         n = 0
-        for row in _iter_parquet(self.shard_urls[:shards], ["id", "url", "title", "text"]):
+        for row in _iter_parquet(self.pick(self.shard_urls, shards, shard_ids), ["id", "url", "title", "text"]):
             paras: list[str] = []
             for block in row["text"].split("\n"):
                 block = block.strip()
@@ -138,9 +146,10 @@ class Gutenberg(Source):
             self.shard_urls = [f"{HF}/manu/project_gutenberg/resolve/main/{p}" for p in files]
         return self.shard_urls
 
-    def iter_docs(self, shards: int, max_docs: int | None) -> Iterator[Document]:
+    def iter_docs(self, shards: int, max_docs: int | None,
+                  shard_ids: list[int] | None = None) -> Iterator[Document]:
         n = 0
-        for row in _iter_parquet(self._shards()[:shards], ["id", "text"]):
+        for row in _iter_parquet(self.pick(self._shards(), shards, shard_ids), ["id", "text"]):
             raw = row["text"]
             head = raw[:5000]
             title = (m.group(1).strip() if (m := _PG_TITLE.search(head)) else f"Gutenberg #{row['id']}")
