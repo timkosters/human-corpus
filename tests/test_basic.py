@@ -33,3 +33,40 @@ def test_search_context_verify(tmp_path):
     v = index.verify(con, "The river flooded the valley every spring. Synergy drives value. Farmers welcomed the rich silt.")
     assert [r["status"] for r in v["results"]] == ["exact", "not_found", "contained"]
     assert "CC BY-SA" in index.attribution(con, [hits[0]["id"]])
+
+
+def test_register_tags():
+    from humancorpus.text import register_code, register_name
+
+    assert register_name(register_code("I miss you more than words can say.")) == "personal+emotive"
+    assert register_name(register_code("I walked to the station.")) == "first_person"
+    assert register_name(register_code("He crossed the bridge at dawn.")) == "narrative"
+    assert register_name(register_code("The bridge spans the river.")) == "expository"
+
+
+def test_fast_hybrid_search(tmp_path, monkeypatch):
+    import pytest
+
+    pytest.importorskip("tantivy")
+    pytest.importorskip("faiss")
+    from humancorpus import fast
+
+    con = _db(tmp_path)
+    doc = Document("letters", "2", "Letters", "Someone", "https://y", "Public domain (US)", "1890",
+                   ["My darling, I miss you every morning. You are always in my heart.",
+                    "The committee approved the annual budget."])
+    index._add_doc(con, *index.prepare_doc(doc))
+    con.commit()
+    monkeypatch.delenv("HUMANCORPUS_SEARCH", raising=False)
+    fast.build(tmp_path / "t.db")
+    fast.reset()
+    db = tmp_path / "t.db"
+    try:
+        hits = index.search(con, "valley flood", db=db)
+        assert hits and "flooded the valley" in hits[0]["text"] and hits[0]["register"]
+        warm = index.search(con, "heart", register="intimate", db=db)
+        assert warm and all("emotive" in h["register"] for h in warm)
+        assert index.search(con, "heart", source="letters", db=db)[0]["source"] == "letters"
+        assert index.search(con, "valley", source="nope", db=db) == []
+    finally:
+        fast.reset()

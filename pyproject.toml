@@ -9,6 +9,7 @@ dependencies = ["mcp>=1.2", "pyarrow>=14"]
 
 [project.optional-dependencies]
 semantic = ["model2vec>=0.3", "numpy"]
+fast = ["model2vec>=0.3", "numpy", "tantivy>=0.24", "faiss-cpu>=1.8"]
 
 [project.scripts]
 humancorpus = "humancorpus.cli:main"

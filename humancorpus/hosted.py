@@ -18,9 +18,32 @@ def ensure_db() -> Path:
     return Path(path)
 
 
+def ensure_search(db: Path) -> None:
+    """Fetch the fast-search sidecar (search/) if the dataset has one. Optional: FTS5 is the fallback."""
+    from .fast import default_dir
+
+    if (default_dir(db) / "manifest.json").exists() or os.environ.get("HUMANCORPUS_NO_FAST"):
+        return
+    try:
+        from huggingface_hub import snapshot_download
+
+        repo = os.environ.get("HUMANCORPUS_DATASET", "timourxyz/human-corpus")
+        print(f"downloading fast search index from {repo} ...", file=sys.stderr, flush=True)
+        snapshot_download(repo, repo_type="dataset", allow_patterns=["search/*", "search/**"],
+                          local_dir=db.parent)
+    except Exception as e:
+        print(f"no fast search index ({e!r}); using SQLite FTS5", file=sys.stderr, flush=True)
+
+
 def main() -> None:
     db = ensure_db()
+    ensure_search(db)
     os.environ["HUMANCORPUS_DB"] = str(db)
+    import threading
+
+    from . import fast
+
+    threading.Thread(target=fast.engine, args=(db,), daemon=True).start()  # warm before first query
     from .web import serve
 
     serve(port=int(os.environ.get("PORT", 7860)))
