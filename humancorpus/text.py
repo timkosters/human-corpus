@@ -53,8 +53,8 @@ def is_good_fragment(s: str, min_words: int = 4, max_words: int = 80) -> bool:
         return False
     if _BAD.search(s):
         return False
-    if s[-1] not in '.!?"”’)':
-        return False  # headings, captions, list items
+    if s.rstrip('"”’\')]')[-1:] not in (".", "!", "?"):
+        return False  # headings, captions, list items, discography lines
     letters = sum(ch.isalpha() for ch in s)
     if letters / max(len(s), 1) < 0.6:
         return False  # tables, numbers, citations

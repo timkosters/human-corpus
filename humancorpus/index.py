@@ -51,7 +51,7 @@ def connect(db: Path | str = DEFAULT_DB, readonly: bool = False) -> sqlite3.Conn
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, check_same_thread=False)
     else:
         db.parent.mkdir(parents=True, exist_ok=True)
-        con = sqlite3.connect(db)
+        con = sqlite3.connect(db, timeout=60)
         con.executescript(SCHEMA)
     con.row_factory = sqlite3.Row
     return con
