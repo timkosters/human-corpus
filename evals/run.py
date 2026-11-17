@@ -85,6 +85,7 @@ def retrieval(client: MCPClient, tasks: list[dict], judge: bool) -> dict:
                 "clean_rate": mean([not x["flags"] for x in res_rows]),
                 "dup_rate": H.near_dup_rate(texts),
                 "relevant_at_10": mean([x["relevance"] >= 1 for x in labeled]) if labeled else None,
+                "usable_at_10": mean([x["usable"] == 1 for x in labeled]) if labeled else None,
                 "good_at_10": mean([x["relevance"] == 2 and x["usable"] == 1 for x in labeled]) if labeled else None,
                 "hit_good_at_5": (any(x["relevance"] == 2 and x["usable"] == 1 for x in labeled if x["rank"] <= 5)
                                   if labeled else None),
@@ -105,7 +106,7 @@ def retrieval(client: MCPClient, tasks: list[dict], judge: bool) -> dict:
         "latency_cold_p50_s": pct(cold, 50), "latency_cold_p95_s": pct(cold, 95), "latency_cold_max_s": max(cold or [0]),
         "latency_warm_p50_s": pct(warm, 50),
         "tag_precision": agg("tag_precision"), "clean_rate": agg("clean_rate"), "dup_rate": agg("dup_rate"),
-        "relevant_at_10": agg("relevant_at_10"), "good_at_10": agg("good_at_10"),
+        "relevant_at_10": agg("relevant_at_10"), "usable_at_10": agg("usable_at_10"), "good_at_10": agg("good_at_10"),
         "hit_good_at_5": agg("hit_good_at_5"), "label_coverage": agg("label_coverage"),
         "gutenberg_share": src.get("gutenberg", 0) / max(1, len(rows)),
         "flag_rates": {k: v / max(1, len(rows)) for k, v in flag_counts.most_common()},

@@ -473,3 +473,69 @@
 {"task": "encouragement", "text": "I'm not a true believer in that, but I do believe now.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
 {"task": "encouragement", "text": "It was true, though I did not believe; refused to believe.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
 {"task": "encouragement", "text": "I verily believe he that told it to me, did himself believe it to be true.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "love_letter", "text": "I'm gonna miss everyone I work with every day.", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "love_letter", "text": "I wish you could have some every morning, too!", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "love_letter", "text": "We can always get elected to this house without opposition.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "love_letter", "text": "How I love that quiet place!", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "thank_you_note", "text": "I don't know how I shall thank you.", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "thank_you_note", "text": "I don't know how to thank you....", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "thank_you_note", "text": "“You’ll not see him so long as I’m about to look after you,” she remarked.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "thank_you_note", "text": "I wish you would look after him and tell him what to do.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "thank_you_note", "text": "As I observed him under the shadow of my book, I felt like a spy watching to detect incipient weakness--was I disappointed that he did not look ill?", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "condolence", "text": "No one will notice their loss.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "condolence", "text": "If you do, you will be sorry for it, and you needn't expect any sympathy from me.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "condolence", "text": "To which it was necessary to answer soberly--\"I'm very sorry to hear it; even the cats bewail her loss.\"", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "condolence", "text": "It's your loss if you pass.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "condolence", "text": "I was deeply moved, and for a quarter of an hour I was silent, and absorbed in my thoughts.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "condolence", "text": "We all deplore his loss deeply, and I lose a valued friend and trusty officer.", "relevance": 1, "usable": 0, "by": "claude-in-session"}
+{"task": "condolence", "text": "The unhappy gentleman was well known in the most respectable circles, and his loss will be widely and deeply deplored.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "condolence", "text": "Do you think it necessary to have very large families?", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "condolence", "text": "Maybe her family thinks you made her sick.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "We don’t have to, and the very least we can do is raise a glass to them in all their bad, wild, brave, magnificent glory.", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "The following day, the band posted an image with the phrase \"Raise a glass to tomorrow's blues\" over it.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "You have always been too kind to me.", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "You must remember that, during the many years that have passed since you have been with me here you have made no kind of complaint.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "Here's to hoping that their next project is just as encouraging, with a lot more depth.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "Here's to everybody's health and prosperity and good luck for the rest of the year!", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "Michelle films her boyfriend and asks questions about the first day they met.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "One day his major met him.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "The first day he met some officials there, who took two of the castaways into custody.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "Love and works of love are emphasised.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "I wanted to send you my congratulations on your award and to wish you a very happy birthday with many happy returns.", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "When she goes, he says her \"happy birthday\".", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "The bridegroom may be blyth, the bride may smile; Rejoice thro' life, and all your fears beguile.", "relevance": 1, "usable": 0, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "We spend anxious days and sleepless nights soothing their cries and comforting their wailings, and we rejoice in our power to cherish and nourish them into a full and happy life by any sacrifice of ourselves.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "apology", "text": "I feel like I let the guys down.", "relevance": 1, "usable": 0, "by": "claude-in-session"}
+{"task": "apology", "text": "Let us sit down, dear, all three of us.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "apology", "text": "Forgive me, I beg you, forgive me!", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "apology", "text": "I hope at any rate that you will forgive me my part in it.", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "cover_letter", "text": "I am not writing for them.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "cover_letter", "text": "I am writing on the train.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "cover_letter", "text": "I will also be finishing my teaching diploma in yoga which is something I am passionate about.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "cover_letter", "text": "We teach the children the truth.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "cover_letter", "text": "Upon this matter of the teaching of history I am a fanatic.", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "cover_letter", "text": "I shall look to hear from you by return mail.", "relevance": 1, "usable": 0, "by": "claude-in-session"}
+{"task": "retirement_card", "text": "If trouble rests you, God! your life is rest.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "retirement_card", "text": "No, no; I promise you that--solemnly; it is medical aid that I want; it is rest, I tell you--rest, rest, rest.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "retirement_card", "text": "you believe me, I know how to appreciate.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "eulogy", "text": "Daisy loves garden centres so she can see flowers.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "eulogy", "text": "Sorek was an avid gardener, and loved to plant plants and tend to his gardens.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "eulogy", "text": "Collins enjoys gardening and has expressed her love of plants.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "eulogy", "text": "I don't know whether he served his full time.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "eulogy", "text": "I thought you’d always had everything in the world you wanted!", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "eulogy", "text": "I think life has always been a pressure cooker.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "eulogy", "text": "So I believe, my dear boy; but life is always full of partings, and absence from those we love.", "relevance": 1, "usable": 0, "by": "claude-in-session"}
+{"task": "congratulations_baby", "text": "Since then I've had letters saying \"Well done for cracking him one\" from little old ladies, young women, kids, guys.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "congratulations_baby", "text": "But have you never lived in a town?", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "congratulations_baby", "text": "I will never forget you while I live.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "congratulations_baby", "text": "There is no exception for a gift to charity under such circumstances.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "nature_description", "text": "It is open dawn to dusk from spring until the first heavy snow.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "nature_description", "text": "At dusk a powdering of snow began to fall, renewing the purity of the far-stretching grey plains, and quickly obliterating the roads.", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "nature_description", "text": "A mist-like rain spread a blue, tremulous dusk over the garden.", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "nature_description", "text": "A light east wind blew behind them, the water sparkled as the moon rose, and shadowy woods and dark hills opened out and faded on their port side.", "relevance": 2, "usable": 0, "by": "claude-in-session"}
+{"task": "nature_description", "text": "It is described as 'a green smell, a smell of shredded leaves and oozing resin, of crushed wood and splashed sap, a tart smell, which bore some relation to the smell of bitten apples.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "nature_description", "text": "For a second there was silence, and the blue smoke from the gun hung heavily upon the damp autumn air.", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "encouragement", "text": "You must give that word up.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "encouragement", "text": "You must give the lady up.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "encouragement", "text": "Let your heart be comforted; ye believe in God, believe also in me.", "relevance": 1, "usable": 0, "by": "claude-in-session"}
+{"task": "encouragement", "text": "I believe in you, and I have n't believed in anybody for a long while.", "relevance": 1, "usable": 1, "by": "claude-in-session"}

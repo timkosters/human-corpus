@@ -262,3 +262,38 @@ def clean_quotes(s: str) -> str:
     if t.endswith(")") and "(" not in t:
         t = t[:-1]
     return t or s
+
+
+# --------------------------------------------------------------------------- #
+# Standalone check: sentences that need context or editing before they can be dropped into a
+# personal draft. Used as a ranking penalty, never as a hard filter.
+# --------------------------------------------------------------------------- #
+_DANGLING = {"he", "she", "his", "her", "him", "they", "them", "their", "this", "these", "those", "such",
+             "its", "then", "thus", "hence", "therefore", "however", "also"}
+_CAP_OK = {"i", "i'm", "i've", "i'll", "i'd", "god", "lord", "o", "oh", "mr", "mrs", "miss", "sir", "heaven",
+           "christmas", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "english"}
+_SAY = re.compile(r"\b(said|cried|replied|exclaimed|answered|asked|whispered|shouted|tells|told)\b", re.I)
+_NAME = re.compile(r"(?<![.!?;:\"'“‘—(-] )(?<![\"'“‘—(-])\b[A-Z][a-z]+")
+_POSSESSIVE = re.compile(r"^[A-Z][a-z]+'s\b")
+_NOT_POSS = re.compile(r"^(there|it|that|here|what|let|he|she|who|where)'s\b", re.I)
+
+
+def standalone_issues(s: str, allow_archaic: bool = False) -> list[str]:
+    """Reasons a sentence would not stand alone: names, dangling he/this, dialogue tags, markup, archaism."""
+    out = []
+    body = re.sub(r"^[\"'“‘(\s]+", "", s.strip())
+    words = _WORD.findall(body)
+    if words and words[0].lower() in _DANGLING:
+        out.append("dangling_ref")
+    names = [w for w in _NAME.findall(body) if w.lower() not in _CAP_OK]
+    if names and body.startswith(names[0]):
+        names = names[1:]
+    if names or (_POSSESSIVE.match(body) and not _NOT_POSS.match(body)):
+        out.append("proper_name")
+    if _SAY.search(s) and (any(c in s for c in _DQ) or re.search(r"\b(tells|told) (him|her|them)\b", s)):
+        out.append("dialogue_tag")
+    if re.search(r"[\[\]{}<>|_=*#]", s):
+        out.append("markup")
+    if not allow_archaic and {w.lower() for w in words} & _ARCHAIC:
+        out.append("archaic")
+    return out
