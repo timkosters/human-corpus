@@ -374,6 +374,9 @@ def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic
         score = 0.7 * sim_q + 0.3 * lex_s
     if standalone:
         score = score - _standalone_penalty(eng, rows, register, styles)
+    from .rerank import rerank
+
+    score = rerank(query, [r["text"] for r in rows], score)
     # MMR: take the best, then penalise candidates that say nearly the same thing.
     chosen: list[int] = []
     maxsim = np.full(len(rows), -1.0)
