@@ -49,6 +49,13 @@ Still weak: eulogy, new-baby card and cover letter. Their hard style filters (re
 celebratory) leave a pool with nothing on topic. Next step: treat style as a soft boost when the filtered
 pool scores low, and fix sentence-initial names ("Michelle films her boyfriend...") that the name check misses.
 
+**Deployed 2026-11-18** to the live Space. Live, warm: uncached search p50 0.27 s (was 0.16 s), cached
+0.13 s, verify_draft max 0.17 s per draft (was 21 s); graded metrics match the local run. Two deploy
+lessons: the reranker padded every sentence to the longest (fixed with length-sorted batches), and
+onnxruntime started one thread per host CPU on a 2-CPU container, which made it 12x slower (threads are now
+capped at the cgroup quota). Right after a reboot, searches take about 1 s until the disk cache warms.
+"love is patient" still returns the hospital-patients sentence, now 5th instead of 1st.
+
 Grading caveat: one grader (Claude in this thread) labeled both runs; labels are in `labels.jsonl` with `by`.
 
 ---
