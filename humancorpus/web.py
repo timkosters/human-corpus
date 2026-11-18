@@ -5,6 +5,7 @@ Run:  humancorpus serve --http --port 7860
 from __future__ import annotations
 
 import inspect
+import ipaddress
 import os
 import time
 from collections import defaultdict
@@ -40,9 +41,18 @@ class RateLimit:
         self.buckets: dict[str, list[float]] = defaultdict(lambda: [float(BURST), time.monotonic()])
 
     def _ip(self, scope) -> str:
-        for k, v in scope.get("headers", []):
-            if k == b"x-forwarded-for":
-                return v.decode().split(",")[0].strip()
+        """The client address as our own proxy saw it.
+
+        Proxies append to X-Forwarded-For, so everything left of the last hop is whatever the
+        client sent and can be forged to dodge the limit. Take the rightmost public address.
+        """
+        xff = ",".join(v.decode("latin-1") for k, v in scope.get("headers", []) if k == b"x-forwarded-for")
+        for part in reversed(xff.split(",")):
+            try:
+                if ipaddress.ip_address(part.strip()).is_global:
+                    return part.strip()
+            except ValueError:
+                continue
         return (scope.get("client") or ("?",))[0]
 
     async def __call__(self, scope, receive, send):
@@ -58,8 +68,10 @@ class RateLimit:
                             "body": b'{"error":"rate limited, retry in a few seconds"}'})
                 return
             b[0] -= 1
-            if len(self.buckets) > 50_000:
-                self.buckets.clear()
+            if len(self.buckets) > 50_000:  # forget idle clients, not everyone (a full clear resets abusers too)
+                cutoff = now - 120
+                for ip in [ip for ip, (_, t) in self.buckets.items() if t < cutoff]:
+                    del self.buckets[ip]
         await self.app(scope, receive, send)
 
 
