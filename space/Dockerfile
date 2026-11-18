@@ -10,6 +10,7 @@ USER user
 ENV HOME=/home/user \
     HUMANCORPUS_DB=/home/user/data/corpus.db \
     HUMANCORPUS_DATASET=timourxyz/human-corpus \
+    HUMANCORPUS_THREADS=2 \
     HUMANCORPUS_PUBLIC_URL=https://timourxyz-human-corpus.hf.space/mcp
 # Bake the small embedding model into the image so cold starts don't fetch it.
 RUN python -c "from model2vec import StaticModel; StaticModel.from_pretrained('minishlab/potion-base-8M')" && \

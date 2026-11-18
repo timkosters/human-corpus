@@ -42,6 +42,25 @@ REGISTER_FILTERS["intimate"] = {c for c in _ALL if c & EMOTIVE_BIT and c & 7 in 
 REGISTER_FILTERS["conversational"] = {c for c in _ALL if c & 7 in (2, 3, 4)}
 
 
+def cpu_budget() -> int:
+    """CPUs this process may really use: the cgroup quota (containers such as HF Spaces report every host
+    CPU in os.cpu_count() but allow only 2), else the affinity mask. Override with HUMANCORPUS_THREADS."""
+    if os.environ.get("HUMANCORPUS_THREADS"):
+        return max(1, int(os.environ["HUMANCORPUS_THREADS"]))
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 2)
+    try:  # cgroup v2, then v1
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
+    except (OSError, ValueError):
+        try:
+            quota = Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text().strip()
+            period = Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text().strip()
+        except OSError:
+            quota = "max"
+    if quota not in ("max", "-1"):
+        n = min(n, max(1, int(quota) // int(period)))
+    return max(1, n)
+
+
 def default_dir(db: Path | str) -> Path:
     env = os.environ.get("HUMANCORPUS_SEARCH")
     return Path(env) if env else Path(db).parent / "search"
@@ -221,7 +240,7 @@ class Engine:
             rows = np.flatnonzero(self.styles & STYLE_BIT[name]).astype(np.int64)
             if 0 < len(rows) < 0.4 * len(regs):
                 self.sub[name] = (self._binary_index(bits, rows, dim), rows)
-        faiss.omp_set_num_threads(int(os.environ.get("HUMANCORPUS_THREADS", os.cpu_count() or 2)))
+        faiss.omp_set_num_threads(cpu_budget())
 
     @staticmethod
     def _binary_index(bits, rows, dim, chunk=2_000_000):

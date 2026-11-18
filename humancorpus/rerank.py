@@ -28,7 +28,10 @@ class _MiniLM:
         tok.enable_truncation(64)
         tok.enable_padding()
         so = ort.SessionOptions()
-        so.intra_op_num_threads = int(os.environ.get("HUMANCORPUS_THREADS", os.cpu_count() or 2))
+        from .fast import cpu_budget
+
+        so.intra_op_num_threads = cpu_budget()  # more threads than CPUs made this 12x slower
+        so.inter_op_num_threads = 1
         self.tok = tok
         self.sess = ort.InferenceSession(hf_hub_download(REPO, "onnx/model_quantized.onnx"), so,
                                          providers=["CPUExecutionProvider"])
