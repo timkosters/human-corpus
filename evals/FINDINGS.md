@@ -1,4 +1,59 @@
-# Baseline findings (2026-11-17, live HF Space, tasks v1)
+# Round 1 fixes (2026-11-18): before and after
+
+Same index as the live Space (downloaded locally), same 36 queries, every result graded by Claude in the
+project thread (no API key). 308 extra sentences were graded for the new results.
+
+| Metric | Before | After |
+|---|---|---|
+| Usable@10 (stands alone, graded) | 0.38 | 0.67 |
+| Relevant@10 | 0.33 | 0.44 |
+| Good@10 (use as is) | 0.07 | 0.14 |
+| Queries with a use-as-is sentence in the top 5 | 0.47 | 0.58 |
+| Clean rate (heuristic) | 0.46 | 0.90 |
+| verify_draft per draft, local (max) | 2.8 s | 0.04 s |
+| Search, uncached, local (p50) | 0.09 s | 0.13 s (reranker) |
+| Strict drafts, overall quality (4 briefs) | 2.0 / 5 | 3.5 / 5 |
+
+What changed, with each step's effect on graded results:
+
+1. **verify_draft via Tantivy** instead of an FTS5 phrase scan: 10x to 70x faster, identical verdicts on all 8 drafts.
+2. **Strip quote debris** from returned text (`original` keeps the stored sentence; verify still matches):
+   usable 0.38 to 0.52, hit@5 0.47 to 0.53.
+3. **Standalone ranking**: penalty for names, dangling he/this, dialogue tags; personal briefs prefer
+   first/second-person sentences over narration (`standalone=false` turns it off): usable 0.52 to 0.61,
+   relevant 0.33 to 0.38.
+4. **MiniLM reranker** (int8 ONNX, 23 MB) on the top 40 candidates, so word order counts
+   ("love is patient" no longer returns hospital patients): relevant 0.38 to 0.44, good 0.12 to 0.14,
+   hit@5 0.50 to 0.58. Cost: about 90 ms per uncached search locally, likely 150 to 250 ms on the Space.
+5. **Guide**: tells models to put the brief's concrete details in queries. The better strict drafts owe
+   part of their gain to this: "taking good care of my dog" was findable before too (rank 3 on the live server).
+
+Per task (relevant@10 / good@10, before to after):
+
+| Task | Relevant before | after | Good before | after |
+|---|---|---|---|---|
+| love_letter | 0.53 | 0.57 | 0.17 | 0.30 |
+| thank_you_note | 0.50 | 0.57 | 0.03 | 0.27 |
+| condolence | 0.23 | 0.30 | 0.07 | 0.13 |
+| birthday_toast | 0.37 | 0.57 | 0.00 | 0.10 |
+| wedding_speech | 0.23 | 0.47 | 0.07 | 0.10 |
+| apology | 0.47 | 0.63 | 0.10 | 0.17 |
+| cover_letter | 0.10 | 0.27 | 0.03 | 0.03 |
+| retirement_card | 0.13 | 0.37 | 0.00 | 0.07 |
+| eulogy | 0.33 | 0.33 | 0.00 | 0.00 |
+| congratulations_baby | 0.20 | 0.10 | 0.03 | 0.03 |
+| nature_description | 0.57 | 0.77 | 0.27 | 0.33 |
+| encouragement | 0.23 | 0.30 | 0.07 | 0.13 |
+
+Still weak: eulogy, new-baby card and cover letter. Their hard style filters (reflective, aphorism,
+celebratory) leave a pool with nothing on topic. Next step: treat style as a soft boost when the filtered
+pool scores low, and fix sentence-initial names ("Michelle films her boyfriend...") that the name check misses.
+
+Grading caveat: one grader (Claude in this thread) labeled both runs; labels are in `labels.jsonl` with `by`.
+
+---
+
+# Baseline findings (round 0) (2026-11-17, live HF Space, tasks v1)
 
 ## Scorecard
 

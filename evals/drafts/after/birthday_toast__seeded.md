@@ -1,0 +1,1 @@
+I have known Sam for twenty-two years, which means I have seen every haircut. He has been very kind to me in that time, mostly by not mentioning mine. Forty looks good on you, old friend. So raise a glass: here's to our friend, in life's every stage, and here's to a long ride together.

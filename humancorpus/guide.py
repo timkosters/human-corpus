@@ -48,7 +48,8 @@ Every result from this server is a verbatim human sentence with its source.
   a wedding speech -> style="aphorism" for the closing line.
 - Pass like="<a sentence in the voice you want>" to rank by closeness to that example as well.
 - Query by feeling and situation ("miss you mornings", "proud of you"), not by genre labels
-  ("love letter").
+  ("love letter"). Include the brief's concrete details too: "taking good care of my dog" finds
+  a sentence about a dog where "thank you for your kindness" never will.
 
 ## Query tips
 - mode="phrase" finds an exact word sequence. mode="raw" accepts FTS5 syntax:

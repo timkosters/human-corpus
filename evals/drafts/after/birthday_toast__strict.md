@@ -1,0 +1,1 @@
+We have been friends for years. You haven't changed a bit inside and most marvellously outside. You've always been so good and kind to us. Many happy returns of your birthday! Raise a glass, and keep more like this coming. Here's to all of our futures.

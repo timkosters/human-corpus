@@ -6,7 +6,9 @@ One command scores the MCP server on real drafting tasks and diffs against a sav
 python -m evals.run                                  # live server, retrieval + service metrics (~1 min, no API key)
 python -m evals.run --drafts evals/drafts/baseline   # also score saved drafts (verify_draft + cached judge scores)
 python -m evals.run --server http://127.0.0.1:7860/mcp   # a local `humancorpus serve --http`
-python -m evals.run --judge                          # Claude labels results it has not seen (pip install -e ".[eval]")
+python -m evals.grade export                         # no API key: unseen results -> evals/grading/pending.txt
+python -m evals.grade ingest evals/grading/answers.txt   # grades written as "n: relevance,usable"
+python -m evals.run --judge                          # or: Claude labels them via the API (pip install -e ".[eval]")
 python -m evals.run --compose --only love_letter     # Claude drafts via the MCP tools, then judge scores it
 python -m evals.run --save-baseline                  # accept this run as the new baseline
 ```
@@ -37,7 +39,16 @@ and prints the scorecard with `vs baseline` deltas marked better or worse.
   (Claude, default `claude-opus-5-5`, override with `HC_EVAL_JUDGE_MODEL`), or add rows by hand.
   `label_coverage` shows how much of a run the labels cover; relevance metrics are over labeled rows only.
 - `drafts/baseline/`: 8 drafts (4 briefs x strict/seeded) written by hand in a thread with the live MCP, plus judge scores.
-- `baseline.json`: summary metrics the next run is compared against.
+- `drafts/after/`: the 4 strict drafts rewritten after round 1 fixes (seeded copies unchanged).
+- `baseline.json`: live Space summary. `baseline.local.json`: local server before round 1 fixes.
+  `BASELINE_SCORECARD.md` / `AFTER_SCORECARD.md`: full scorecards.
+
+## Grading without an API key
+
+Ask Claude (in any session with this repo) to grade `evals/grading/pending.txt`: the file carries the rubric
+and the briefs, and the answers go back with `python -m evals.grade ingest FILE`. For drafts,
+`python -m evals.grade drafts DIR` prints the rubric and every draft that has no `.judge.json` yet; save the
+scores next to each draft as `<draft>.judge.json`. All labels so far were graded this way.
 
 ## Iterating
 
