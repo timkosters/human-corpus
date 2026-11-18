@@ -1,0 +1,1 @@
+I am so sorry for your loss. I know your father had been ill for a long time, and that does not make the end any easier. I hope there is some comfort in knowing how much he was loved and how well you cared for him. Please take all the time you need, and if there is anything I can do, at work or outside it, let me know.

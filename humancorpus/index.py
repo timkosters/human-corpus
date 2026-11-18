@@ -10,7 +10,8 @@ from functools import partial
 from pathlib import Path
 
 from .sources import SOURCES, Document
-from .text import clauses, fingerprint, is_good_fragment, is_reusable, normalize, split_sentences, word_count
+from .text import (clauses, clean_quotes, fingerprint, is_good_fragment, is_reusable, normalize, split_sentences,
+                   word_count)
 
 DEFAULT_DB = Path(os.environ.get("HUMANCORPUS_DB", Path.home() / ".cache" / "humancorpus" / "corpus.db"))
 
@@ -239,7 +240,7 @@ def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "an
            source: str | None = None, min_words: int = 4, max_words: int = 60,
            phrases: bool = False, semantic: bool = True, register: str | None = None,
            like: str | None = None, db: Path | str | None = None,
-           style: str | list[str] | None = None) -> list[dict]:
+           style: str | list[str] | None = None, standalone: bool = True) -> list[dict]:
     """Hybrid search when the fast sidecar exists (see fast.py), else SQLite FTS5 BM25 + rerank.
 
     register: style filter, e.g. "intimate", "personal", "dialogue" (fast sidecar only).
@@ -250,8 +251,8 @@ def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "an
 
         eng = fast.engine(db or DEFAULT_DB)
         if eng is not None:
-            rows = _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like,
-                           style)
+            rows = _clean(_hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register,
+                                  like, style, standalone))
             return _add_phrases(rows, query) if phrases else rows
     if register or like or style:
         raise ValueError("register= and like= need the fast search index (humancorpus build-search)")
@@ -274,7 +275,17 @@ def search(con: sqlite3.Connection, query: str, limit: int = 10, mode: str = "an
     rows = [_row(r) for r in con.execute(sql, args)]
     if use_sem:
         rows = _rerank(query, rows, limit)
+    rows = _clean(rows)
     return _add_phrases(rows, query) if phrases else rows
+
+
+def _clean(rows: list[dict]) -> list[dict]:
+    """Strip quotation debris from result text; keep the stored sentence as `original` when it changed."""
+    for r in rows:
+        t = clean_quotes(r["text"])
+        if t != r["text"]:
+            r["original"], r["text"] = r["text"], t
+    return rows
 
 
 def _add_phrases(rows: list[dict], query: str) -> list[dict]:
@@ -314,7 +325,7 @@ def _parse_styles(style, register):
 
 
 def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic, register, like,
-            style=None) -> list[dict]:
+            style=None, standalone=True) -> list[dict]:
     """Tantivy BM25 + 1-bit dense candidates, exact re-embedding, blended score, MMR for variety."""
     import numpy as np
 
@@ -361,6 +372,11 @@ def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic
         score = 0.5 * sim_q + 0.35 * sim_l + 0.15 * lex_s
     else:
         score = 0.7 * sim_q + 0.3 * lex_s
+    if standalone:
+        score = score - _standalone_penalty(eng, rows, register, styles)
+    from .rerank import rerank
+
+    score = rerank(query, [r["text"] for r in rows], score)
     # MMR: take the best, then penalise candidates that say nearly the same thing.
     chosen: list[int] = []
     maxsim = np.full(len(rows), -1.0)
@@ -383,6 +399,28 @@ def _hybrid(eng, con, query, limit, mode, source, min_words, max_words, semantic
     return _with_register(eng, out)
 
 
+PERSONAL_REGISTERS = {"intimate", "personal", "first_person", "conversational", "emotive"}
+PERSONAL_STYLES = {"grateful", "apologetic", "grieving", "celebratory", "casual", "reflective", "advice"}
+
+
+def _standalone_penalty(eng, rows, register, styles):
+    """Down-rank sentences that need context (names, dangling he/this, dialogue tags) and, for personal
+    writing, third-person narration and encyclopedia lines that only mention the feeling."""
+    import numpy as np
+
+    from .text import standalone_issues
+
+    personal = register in PERSONAL_REGISTERS or bool(set(styles) & PERSONAL_STYLES)
+    codes = eng.meta[eng._rows_for_ids([r["id"] for r in rows]), 2] & 7 if personal else None
+    pen = np.zeros(len(rows))
+    for i, r in enumerate(rows):
+        issues = standalone_issues(r["text"], allow_archaic="archaic" in styles)
+        pen[i] = min(0.15, 0.06 * len(issues))
+        if personal and codes[i] in (0, 1):  # expository, narrative
+            pen[i] += 0.05
+    return pen
+
+
 def _with_register(eng, rows: list[dict]) -> list[dict]:
     fids = [r["id"] for r in rows]
     for r, name, st in zip(rows, eng.register_of(fids), eng.styles_of(fids)):
@@ -400,7 +438,7 @@ def random_fragments(con: sqlite3.Connection, n: int = 5, query: str | None = No
                       semantic=False, db=db)
         import random
         random.shuffle(rows)
-        return rows[:n]
+        return _clean(rows[:n])
     max_id = con.execute("SELECT max(id) FROM fragments").fetchone()[0] or 0
     import random
     out: list[dict] = []
@@ -414,7 +452,7 @@ def random_fragments(con: sqlite3.Connection, n: int = 5, query: str | None = No
         ).fetchone()
         if r and r["id"] not in {o["id"] for o in out}:
             out.append(_row(r))
-    return out
+    return _clean(out)
 
 
 def context(con: sqlite3.Connection, fragment_id: int, window: int = 2) -> dict:
@@ -433,13 +471,28 @@ def context(con: sqlite3.Connection, fragment_id: int, window: int = 2) -> dict:
     return {**meta, "fragments": [{"id": r["id"], "text": r["text"], "focus": r["id"] == fragment_id} for r in rows]}
 
 
-def verify(con: sqlite3.Connection, text: str) -> dict:
+def _phrase_candidates(con: sqlite3.Connection, toks: list[str], eng=None) -> list[dict]:
+    """Fragments that contain the tokens as a phrase: Tantivy when the sidecar is loaded, else FTS5."""
+    if eng is not None:
+        ids = eng.phrase(toks)
+        found = _fetch(con, ids)
+        return [found[i] for i in ids if i in found]
+    return [_row(r) for r in con.execute(
+        f"SELECT {_FRAG_COLS} FROM fragments_fts JOIN fragments f ON f.id=fragments_fts.rowid "
+        "JOIN docs d ON d.id=f.doc_id WHERE fragments_fts MATCH ? LIMIT 50",
+        ('"' + " ".join(toks) + '"',))]
+
+
+def verify(con: sqlite3.Connection, text: str, db: Path | str | None = None) -> dict:
     """Check each sentence of a draft against the corpus.
 
     exact:     the sentence exists verbatim as a human-written sentence.
     contained: the sentence appears verbatim inside a longer human sentence.
     not_found: no verbatim human source (this sentence may be machine-written).
     """
+    from . import fast
+
+    eng = fast.engine(db or DEFAULT_DB)
     results = []
     for para in re.split(r"\n\s*\n", text):
         for sent in split_sentences(para):
@@ -453,14 +506,10 @@ def verify(con: sqlite3.Connection, text: str) -> dict:
             else:
                 toks = _TOKEN.findall(sent)
                 if len(toks) >= 3:
-                    norm = normalize(sent).rstrip(".!?")
-                    for r in con.execute(
-                        f"SELECT {_FRAG_COLS} FROM fragments_fts JOIN fragments f ON f.id=fragments_fts.rowid "
-                        "JOIN docs d ON d.id=f.doc_id WHERE fragments_fts MATCH ? LIMIT 50",
-                        ('"' + " ".join(toks) + '"',),
-                    ):
+                    norm = normalize(sent).rstrip(".!?").strip("\"' ")
+                    for r in _phrase_candidates(con, toks, eng):
                         if norm in normalize(r["text"]):
-                            status, match = "contained", _row(r)
+                            status, match = "contained", r
                             break
             results.append({"sentence": sent, "status": status, "source": match})
     total = len(results)

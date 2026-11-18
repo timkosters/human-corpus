@@ -32,7 +32,7 @@ def con():
 def search_fragments(query: str, limit: int = 10, mode: str = "any", source: str | None = None,
                      min_words: int = 4, max_words: int = 40, phrases: bool = False,
                      semantic: bool = True, register: str | None = None,
-                     like: str | None = None, style: str | None = None) -> list[dict]:
+                     like: str | None = None, style: str | None = None, standalone: bool = True) -> list[dict]:
     """Find human-written sentences by topic, meaning and style (hybrid keyword + embedding search).
 
     query: keywords or a short idea, e.g. "missing you in the morning".
@@ -53,19 +53,21 @@ def search_fragments(query: str, limit: int = 10, mode: str = "any", source: str
     min_words/max_words: fragment length bounds.
     phrases: also return clause-sized pieces of each sentence, best match first.
     semantic: rank by meaning as well as keywords.
+    standalone: prefer sentences that work out of context (no unexplained names, no dangling
+          "he"/"this", no dialogue tags). Default true; set false for research or narrative.
     Returns id, text, source, title, author, url, license, register, styles, similarity per fragment.
     """
     return [dict(r) for r in _cached_search(query[:500], max(1, min(limit, 50)), mode, source, min_words,
                                              max_words, phrases, semantic, register, (like or "")[:1000] or None,
-                                             style)]
+                                             style, standalone)]
 
 
 @lru_cache(maxsize=4096)
 def _cached_search(*args) -> tuple:
-    query, limit, mode, source, min_words, max_words, phrases, semantic, register, like, style = args
+    query, limit, mode, source, min_words, max_words, phrases, semantic, register, like, style, standalone = args
     return tuple(index.search(con(), query, limit=limit, mode=mode, source=source, min_words=min_words,
                               max_words=max_words, phrases=phrases, semantic=semantic, register=register,
-                              like=like, db=DB, style=style))
+                              like=like, db=DB, style=style, standalone=standalone))
 
 
 @mcp.tool()
@@ -87,7 +89,7 @@ def verify_draft(text: str) -> dict:
     Each sentence gets status "exact" (verbatim human sentence), "contained" (verbatim inside a
     human sentence) or "not_found". human_ratio is the share of sentences that are human-sourced.
     """
-    return index.verify(con(), text[:MAX_VERIFY_CHARS])
+    return index.verify(con(), text[:MAX_VERIFY_CHARS], db=DB)
 
 
 @mcp.tool()

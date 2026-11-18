@@ -225,3 +225,75 @@ def style_mask(s: str) -> int:
 
 def style_names(mask: int) -> list[str]:
     return [n for n in STYLES if mask & STYLE_BIT[n]]
+
+
+# --------------------------------------------------------------------------- #
+# Display cleanup: quotation debris left by sentence splitting. The cleaned text is always
+# verbatim inside the stored sentence, so verify_draft still finds it ("contained").
+# --------------------------------------------------------------------------- #
+_DQ = '"“”'
+_OPEN = '"“‘\''
+_CLOSE = '"”’\''
+
+
+def clean_quotes(s: str) -> str:
+    """Drop unbalanced or wrapping quote marks at the ends of a sentence: `And I miss you."` -> `And I miss you.`"""
+    t = s.strip()
+    for _ in range(3):
+        before = t
+        n_dq = sum(t.count(c) for c in _DQ)
+        # A whole sentence in quotes: "I hope you forgive me." -> I hope you forgive me.
+        if len(t) > 2 and t[0] in _OPEN and t[-1] in _CLOSE and n_dq in (0, 2) and \
+                not any(c in t[1:-1] for c in _DQ):
+            t = t[1:-1].strip()
+        elif n_dq % 2:
+            if t[-1] in _DQ:
+                t = t[:-1].rstrip()
+            elif len(t) > 1 and t[-2] in _DQ and t[-1] in ".!?)":
+                t = t[:-2] + t[-1]
+            elif t[0] in _DQ:
+                t = t[1:].lstrip()
+        elif t[-1:] in "'’" and t[-2:-1] in ".!?," and t[:1] not in "'‘":
+            t = t[:-1]
+        elif t[:1] in "'‘" and t[-1:] not in "'’":
+            t = t[1:].lstrip()
+        if t == before:
+            break
+    if t.endswith(")") and "(" not in t:
+        t = t[:-1]
+    return t or s
+
+
+# --------------------------------------------------------------------------- #
+# Standalone check: sentences that need context or editing before they can be dropped into a
+# personal draft. Used as a ranking penalty, never as a hard filter.
+# --------------------------------------------------------------------------- #
+_DANGLING = {"he", "she", "his", "her", "him", "they", "them", "their", "this", "these", "those", "such",
+             "its", "then", "thus", "hence", "therefore", "however", "also"}
+_CAP_OK = {"i", "i'm", "i've", "i'll", "i'd", "god", "lord", "o", "oh", "mr", "mrs", "miss", "sir", "heaven",
+           "christmas", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "english"}
+_SAY = re.compile(r"\b(said|cried|replied|exclaimed|answered|asked|whispered|shouted|tells|told)\b", re.I)
+_NAME = re.compile(r"(?<![.!?;:\"'“‘—(-] )(?<![\"'“‘—(-])\b[A-Z][a-z]+")
+_POSSESSIVE = re.compile(r"^[A-Z][a-z]+'s\b")
+_NOT_POSS = re.compile(r"^(there|it|that|here|what|let|he|she|who|where)'s\b", re.I)
+
+
+def standalone_issues(s: str, allow_archaic: bool = False) -> list[str]:
+    """Reasons a sentence would not stand alone: names, dangling he/this, dialogue tags, markup, archaism."""
+    out = []
+    body = re.sub(r"^[\"'“‘(\s]+", "", s.strip())
+    words = _WORD.findall(body)
+    if words and words[0].lower() in _DANGLING:
+        out.append("dangling_ref")
+    names = [w for w in _NAME.findall(body) if w.lower() not in _CAP_OK]
+    if names and body.startswith(names[0]):
+        names = names[1:]
+    if names or (_POSSESSIVE.match(body) and not _NOT_POSS.match(body)):
+        out.append("proper_name")
+    if _SAY.search(s) and (any(c in s for c in _DQ) or re.search(r"\b(tells|told) (him|her|them)\b", s)):
+        out.append("dialogue_tag")
+    if re.search(r"[\[\]{}<>|_=*#]", s):
+        out.append("markup")
+    if not allow_archaic and {w.lower() for w in words} & _ARCHAIC:
+        out.append("archaic")
+    return out

@@ -1,0 +1,58 @@
+{
+ "meta": {
+  "when": "2026-11-18T00-51-37",
+  "server": "https://timourxyz-human-corpus.hf.space/mcp",
+  "tasks_version": 1,
+  "first_call_s": 0.23,
+  "wall_s": 15.2
+ },
+ "retrieval": {
+  "summary": {
+   "queries": 36,
+   "errors": 0,
+   "results": 360,
+   "empty_queries": 0,
+   "latency_cold_p50_s": 0.248784655999998,
+   "latency_cold_p95_s": 0.3429495739999311,
+   "latency_cold_max_s": 1.0611854159999439,
+   "latency_warm_p50_s": 0.11245934199996555,
+   "tag_precision": 1.0,
+   "clean_rate": 0.8888888888888888,
+   "dup_rate": 0.0,
+   "relevant_at_10": 0.44135802469135804,
+   "usable_at_10": 0.6709876543209876,
+   "good_at_10": 0.13734567901234568,
+   "hit_good_at_5": 0.5833333333333334,
+   "label_coverage": 0.9888888888888889,
+   "gutenberg_share": 0.5666666666666667,
+   "flag_rates": {
+    "dangling_ref": 0.044444444444444446,
+    "proper_name": 0.041666666666666664,
+    "quote_debris": 0.016666666666666666,
+    "dialogue_tag": 0.008333333333333333,
+    "quoted": 0.002777777777777778,
+    "markup": 0.002777777777777778,
+    "archaic": 0.002777777777777778
+   }
+  }
+ },
+ "drafts": {
+  "summary": {
+   "drafts": 8,
+   "verify_p50_s": 0.12667044499994518,
+   "verify_max_s": 0.13954019500010872,
+   "strict_human_ratio": 1.0,
+   "strict_fits_brief": 3.75,
+   "strict_coherence": 3.5,
+   "strict_fluency": 3.25,
+   "strict_voice": 3.25,
+   "strict_overall": 3.5,
+   "seeded_human_ratio": 0.16075,
+   "seeded_fits_brief": 4.5,
+   "seeded_coherence": 4.5,
+   "seeded_fluency": 4.5,
+   "seeded_voice": 4.25,
+   "seeded_overall": 4.5
+  }
+ }
+}

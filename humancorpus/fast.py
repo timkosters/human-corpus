@@ -42,6 +42,25 @@ REGISTER_FILTERS["intimate"] = {c for c in _ALL if c & EMOTIVE_BIT and c & 7 in 
 REGISTER_FILTERS["conversational"] = {c for c in _ALL if c & 7 in (2, 3, 4)}
 
 
+def cpu_budget() -> int:
+    """CPUs this process may really use: the cgroup quota (containers such as HF Spaces report every host
+    CPU in os.cpu_count() but allow only 2), else the affinity mask. Override with HUMANCORPUS_THREADS."""
+    if os.environ.get("HUMANCORPUS_THREADS"):
+        return max(1, int(os.environ["HUMANCORPUS_THREADS"]))
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 2)
+    try:  # cgroup v2, then v1
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
+    except (OSError, ValueError):
+        try:
+            quota = Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text().strip()
+            period = Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text().strip()
+        except OSError:
+            quota = "max"
+    if quota not in ("max", "-1"):
+        n = min(n, max(1, int(quota) // int(period)))
+    return max(1, n)
+
+
 def default_dir(db: Path | str) -> Path:
     env = os.environ.get("HUMANCORPUS_SEARCH")
     return Path(env) if env else Path(db).parent / "search"
@@ -221,7 +240,7 @@ class Engine:
             rows = np.flatnonzero(self.styles & STYLE_BIT[name]).astype(np.int64)
             if 0 < len(rows) < 0.4 * len(regs):
                 self.sub[name] = (self._binary_index(bits, rows, dim), rows)
-        faiss.omp_set_num_threads(int(os.environ.get("HUMANCORPUS_THREADS", os.cpu_count() or 2)))
+        faiss.omp_set_num_threads(cpu_budget())
 
     @staticmethod
     def _binary_index(bits, rows, dim, chunk=2_000_000):
@@ -291,6 +310,18 @@ class Engine:
             rows = I[0][I[0] >= 0]
         rows = rows[self._allowed(rows, source_code, min_words, max_words, reg_codes, smask)]
         return [int(x) for x in self.ids[rows]]
+
+    def phrase(self, tokens: list[str], k: int = 50) -> list[int]:
+        """Fragment ids containing these tokens as a phrase (stemmed). Used by verify: milliseconds,
+        where an FTS5 phrase query over 40M rows takes seconds on a slow disk."""
+        # Tantivy's tokenizer splits on apostrophes ("don't" -> don, t), so do the same.
+        q = _tantivy_query([p for t in tokens for p in t.split("'") if p], "phrase")
+        if q == '""':
+            return []
+        with self.lock:
+            searcher = self.tindex.searcher()
+            hits = searcher.search(self.tindex.parse_query(q, ["text"]), k, count=False).hits
+            return [searcher.doc(addr)["id"][0] for _, addr in hits]
 
     def register_of(self, fids: list[int]) -> list[str]:
         rows = self._rows_for_ids(fids)

@@ -4,3 +4,5 @@ __pycache__/
 *.db-*
 *.parquet
 .venv/
+evals/results/
+evals/grading/

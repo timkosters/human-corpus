@@ -4,15 +4,17 @@ FROM python:3.12-slim
 RUN useradd -m -u 1000 user
 WORKDIR /app
 COPY --chown=user . /app
-RUN pip install --no-cache-dir ".[semantic,fast]" "huggingface_hub>=0.24" uvicorn starlette
+RUN pip install --no-cache-dir ".[semantic,fast,rerank]" "huggingface_hub>=0.24" uvicorn starlette
 
 USER user
 ENV HOME=/home/user \
     HUMANCORPUS_DB=/home/user/data/corpus.db \
     HUMANCORPUS_DATASET=timourxyz/human-corpus \
+    HUMANCORPUS_THREADS=2 \
     HUMANCORPUS_PUBLIC_URL=https://timourxyz-human-corpus.hf.space/mcp
 # Bake the small embedding model into the image so cold starts don't fetch it.
-RUN python -c "from model2vec import StaticModel; StaticModel.from_pretrained('minishlab/potion-base-8M')"
+RUN python -c "from model2vec import StaticModel; StaticModel.from_pretrained('minishlab/potion-base-8M')" && \
+    python -c "from humancorpus import rerank; assert rerank.model() is not None"
 
 EXPOSE 7860
 CMD ["python", "-m", "humancorpus.hosted"]
