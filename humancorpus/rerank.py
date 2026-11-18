@@ -34,7 +34,19 @@ class _MiniLM:
                                          providers=["CPUExecutionProvider"])
         self.inputs = {i.name for i in self.sess.get_inputs()}
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], batch: int = 16) -> np.ndarray:
+        """Embed in length-sorted batches: padding every text to the longest one made this 5x slower."""
+        order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+        out = np.empty((len(texts), 0), dtype=np.float32)
+        for s in range(0, len(order), batch):
+            idx = order[s:s + batch]
+            v = self._embed([texts[i] for i in idx])
+            if out.shape[1] == 0:
+                out = np.empty((len(texts), v.shape[1]), dtype=np.float32)
+            out[idx] = v
+        return out
+
+    def _embed(self, texts: list[str]) -> np.ndarray:
         enc = self.tok.encode_batch(texts)
         ids = np.array([e.ids for e in enc], dtype=np.int64)
         mask = np.array([e.attention_mask for e in enc], dtype=np.int64)

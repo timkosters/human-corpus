@@ -666,3 +666,11 @@
 {"task": "encouragement", "text": "I hope you will believe me.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
 {"task": "encouragement", "text": "I do believe--I do wish to believe; but my grasp seems gone.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
 {"task": "encouragement", "text": "But I tell you, if you do not believe me, neither do you believe in love itself.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "love_letter", "text": "I is near my church and I don't miss service any Sunday, night or morning.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "birthday_toast", "text": "So here's this number line; here's what we know and celebrate.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "wedding_speech", "text": "Love always protects, love always hopes, love always trusts, love always perseveres.", "relevance": 2, "usable": 1, "by": "claude-in-session"}
+{"task": "apology", "text": "I am sorry where they are now.", "relevance": 0, "usable": 0, "by": "claude-in-session"}
+{"task": "apology", "text": "I felt let down in many ways.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "retirement_card", "text": "You have not earned your wages.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
+{"task": "congratulations_baby", "text": "There is no higher gift from one human being to another than love.", "relevance": 1, "usable": 1, "by": "claude-in-session"}
+{"task": "encouragement", "text": "Give up before it's too late.", "relevance": 0, "usable": 1, "by": "claude-in-session"}
